@@ -1,0 +1,266 @@
+# Developer Skill Analyzer
+
+A Model Context Protocol (MCP) server that analyzes developer skills based on their Jira and GitHub activity history.
+
+## Overview
+
+This MCP server provides tools and resources to analyze developer skills by examining:
+- GitHub repositories, commits, and pull requests
+- Jira issues, comments, and project participation
+- Programming languages used and their frequency
+- Collaboration patterns and code review participation
+- Technical complexity of tasks and solutions
+
+## Features
+
+### Tools
+- `analyze_github_developer`: Analyze skills from GitHub profile and repositories
+- `analyze_jira_developer`: Analyze skills from Jira project participation
+- `get_skill_summary`: Generate comprehensive skill assessment
+- `compare_developers`: Compare skill profiles between developers
+
+### Resources
+- Developer skill profiles and assessments
+- Technology usage patterns
+- Collaboration metrics
+- Learning progression analysis
+
+### Prompts
+- Skill assessment templates
+- Developer comparison frameworks
+- Growth recommendation generators
+
+## Installation
+
+### Prerequisites
+- Python 3.9 or higher
+- Git
+- Access to GitHub API (personal access token)
+- Access to Jira API (API token or credentials)
+
+### Setup
+
+1. Clone the repository:
+```bash
+git clone <repository-url>
+cd developer-skill-analyzer
+```
+
+2. Install dependencies using uv:
+```bash
+# Install uv if you haven't already
+curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install dependencies
+uv sync
+```
+
+3. Set up environment variables:
+```bash
+cp .env.example .env
+# Edit .env with your API credentials
+```
+
+### Environment Variables
+
+Create a `.env` file with the following variables:
+
+```env
+# GitHub API
+GITHUB_ACCESS_TOKEN=your_github_token_here
+
+# Jira API
+JIRA_SERVER_URL=https://your-domain.atlassian.net
+JIRA_EMAIL=your-email@domain.com
+JIRA_API_TOKEN=your_jira_api_token
+
+# Optional: Rate limiting
+API_RATE_LIMIT=100  # requests per minute
+```
+
+## Usage
+
+### Running the Server
+
+```bash
+# Using uv
+uv run dev-skill-analyzer
+
+# Or activate virtual environment and run directly
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+python -m developer_skill_analyzer.server
+```
+
+### Connecting to MCP Clients
+
+#### Claude Desktop
+
+Add to your `claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "developer-skill-analyzer": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--directory",
+        "/path/to/developer-skill-analyzer",
+        "dev-skill-analyzer"
+      ],
+      "env": {
+        "GITHUB_ACCESS_TOKEN": "your_token",
+        "JIRA_SERVER_URL": "your_jira_url",
+        "JIRA_EMAIL": "your_email",
+        "JIRA_API_TOKEN": "your_jira_token"
+      }
+    }
+  }
+}
+```
+
+#### VS Code with GitHub Copilot
+
+Configure in your VS Code MCP settings or `mcp.json`:
+
+```json
+{
+  "servers": {
+    "developer-skill-analyzer": {
+      "type": "stdio",
+      "command": "uv",
+      "args": ["run", "dev-skill-analyzer"],
+      "cwd": "/path/to/developer-skill-analyzer"
+    }
+  }
+}
+```
+
+## API Examples
+
+### Analyze GitHub Developer
+
+```python
+# Tool call example
+await call_tool("analyze_github_developer", {
+    "username": "octocat",
+    "repositories": ["Hello-World", "git-consortium"],
+    "include_contributions": True,
+    "time_range_months": 12
+})
+```
+
+### Analyze Jira Developer
+
+```python
+# Tool call example
+await call_tool("analyze_jira_developer", {
+    "email": "developer@company.com",
+    "projects": ["PROJ-1", "PROJ-2"],
+    "include_comments": True,
+    "time_range_months": 6
+})
+```
+
+## Development
+
+### Project Structure
+
+```
+developer-skill-analyzer/
+├── src/
+│   └── developer_skill_analyzer/
+│       ├── __init__.py
+│       ├── server.py              # Main MCP server
+│       ├── config.py              # Configuration management
+│       ├── models/                # Data models
+│       │   ├── __init__.py
+│       │   ├── developer.py       # Developer profile models
+│       │   ├── skills.py          # Skill models
+│       │   └── analysis.py        # Analysis result models
+│       ├── analyzers/             # Analysis engines
+│       │   ├── __init__.py
+│       │   ├── github_analyzer.py # GitHub data analysis
+│       │   ├── jira_analyzer.py   # Jira data analysis
+│       │   └── skill_processor.py # Skill extraction and scoring
+│       ├── integrations/          # External API integrations
+│       │   ├── __init__.py
+│       │   ├── github_client.py   # GitHub API client
+│       │   └── jira_client.py     # Jira API client
+│       └── utils/                 # Utility functions
+│           ├── __init__.py
+│           ├── rate_limiter.py    # API rate limiting
+│           └── cache.py           # Response caching
+├── tests/                         # Test files
+├── docs/                          # Documentation
+├── .env.example                   # Environment template
+├── .gitignore
+├── README.md
+└── pyproject.toml
+```
+
+### Running Tests
+
+```bash
+# Run all tests
+uv run pytest
+
+# Run with coverage
+uv run pytest --cov=developer_skill_analyzer
+
+# Run specific test file
+uv run pytest tests/test_github_analyzer.py
+```
+
+### Code Quality
+
+```bash
+# Format code
+uv run black .
+uv run isort .
+
+# Lint code
+uv run flake8 .
+uv run mypy .
+
+# Run pre-commit hooks
+uv run pre-commit run --all-files
+```
+
+## Architecture
+
+### Skill Analysis Pipeline
+
+1. **Data Collection**: Gather data from GitHub and Jira APIs
+2. **Preprocessing**: Clean and normalize data structures
+3. **Feature Extraction**: Extract relevant metrics and patterns
+4. **Skill Classification**: Categorize activities into skill areas
+5. **Proficiency Scoring**: Calculate skill levels based on complexity and frequency
+6. **Report Generation**: Create comprehensive skill profiles
+
+### Skill Categories
+
+- **Programming Languages**: Python, JavaScript, Java, etc.
+- **Frameworks & Tools**: React, Django, Docker, etc.
+- **Soft Skills**: Communication, Leadership, Problem-solving
+- **Domain Knowledge**: Web Development, Data Science, DevOps
+- **Collaboration**: Code Reviews, Mentoring, Documentation
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature-name`
+3. Make your changes and add tests
+4. Run the test suite: `uv run pytest`
+5. Submit a pull request
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- Built using the [Model Context Protocol](https://modelcontextprotocol.io/)
+- Utilizes [FastMCP](https://gofastmcp.com/) for rapid development
+- GitHub API integration via [PyGithub](https://pygithub.readthedocs.io/)
+- Jira API integration via [atlassian-python-api](https://atlassian-python-api.readthedocs.io/)
