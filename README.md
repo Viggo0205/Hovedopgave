@@ -1,23 +1,46 @@
-# Developer Skill Analyzer
+# Developer Skill Analyzer - MCP Server
 
-A Model Context Protocol (MCP) server that analyzes developer skills based on their Jira and GitHub activity history.
+A Model Context Protocol (MCP) server that analyzes developer skills based on GitHub and Jira data, with multi-AI client support.
 
-## Overview
+## 🚀 Quick Start
 
-This MCP server provides tools and resources to analyze developer skills by examining:
-- GitHub repositories, commits, and pull requests
-- Jira issues, comments, and project participation
-- Programming languages used and their frequency
-- Collaboration patterns and code review participation
-- Technical complexity of tasks and solutions
+### 1. Run the MCP Client
+```powershell
+python mcp_client.py
+```
 
-## Features
+### 2. Set AI API Keys (Optional)
+```powershell
+# For Claude AI
+$env:ANTHROPIC_API_KEY='your-claude-key'
 
-### Tools
-- `analyze_github_developer`: Analyze skills from GitHub profile and repositories
-- `analyze_jira_developer`: Analyze skills from Jira project participation
-- `get_skill_summary`: Generate comprehensive skill assessment
-- `compare_developers`: Compare skill profiles between developers
+# For GPT-4
+$env:OPENAI_API_KEY='your-openai-key'
+```
+
+### 3. Chat Naturally
+```
+🤖 Multi-AI: Who knows Python?
+🤖 Multi-AI: What are Sarah's skills?
+🤖 Multi-AI: compare Who are our best developers?
+```
+
+## 🤖 Features
+
+### MCP Server
+- ✅ FastMCP server with mock data support
+- ✅ GitHub profile analysis simulation
+- ✅ Jira project analysis simulation
+- ✅ Skill extraction and proficiency assessment
+- ✅ Team expertise mapping
+
+### Multi-AI Client
+- ✅ Claude 3.5 Sonnet integration
+- ✅ GPT-4 Turbo integration
+- 🚧 Gemini Pro support (coming soon)
+- 🚧 Local model support (Ollama)
+- ✅ AI model comparison mode
+- ✅ Natural language understanding
 
 ### Resources
 - Developer skill profiles and assessments

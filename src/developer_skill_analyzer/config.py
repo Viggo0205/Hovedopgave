@@ -15,8 +15,11 @@ class Config:
     
     def __init__(self):
         """Initialize configuration from environment variables."""
+        # Mock Mode Configuration
+        self.mock_mode: bool = os.getenv("MOCK_MODE", "true").lower() == "true"
+        
         # GitHub API Configuration
-        self.github_token: Optional[str] = os.getenv("GITHUB_ACCESS_TOKEN")
+        self.github_token: Optional[str] = os.getenv("GITHUB_ACCESS_TOKEN") or os.getenv("GITHUB_TOKEN")
         
         # Jira API Configuration
         self.jira_server_url: Optional[str] = os.getenv("JIRA_SERVER_URL")

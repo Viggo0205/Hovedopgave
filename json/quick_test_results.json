@@ -1,0 +1,539 @@
+{
+  "test_environment": "MCP Test Environment",
+  "test_date": "2025-11-14T14:47:28.368030",
+  "summary": {
+    "total_tests": 8,
+    "passed": 8,
+    "failed": 0
+  },
+  "test_developers": [
+    {
+      "name": "Sarah Martinez",
+      "github_username": "sarah_martinez",
+      "jira_email": "sarah.martinez@company.com",
+      "role": "Senior Backend Developer"
+    },
+    {
+      "name": "James Chen",
+      "github_username": "james_chen",
+      "jira_email": "james.chen@company.com",
+      "role": "Frontend Developer"
+    },
+    {
+      "name": "Alex Rodriguez",
+      "github_username": "alex_rodriguez",
+      "jira_email": "alex.rodriguez@company.com",
+      "role": "Full Stack Engineer"
+    }
+  ],
+  "results": [
+    {
+      "test_name": "GitHub Analysis - Sarah Martinez",
+      "success": true,
+      "result": {
+        "developer": "sarah_martinez",
+        "analysis_type": "github",
+        "time_range_months": 12,
+        "skill_assessment": {
+          "programming_languages": {
+            "Python": {
+              "proficiency": 0.6,
+              "projects": 9
+            },
+            "Go": {
+              "proficiency": 0.7,
+              "projects": 9
+            },
+            "TypeScript": {
+              "proficiency": 0.8,
+              "projects": 9
+            }
+          },
+          "frameworks": [
+            "Django",
+            "FastAPI",
+            "React",
+            "PostgreSQL"
+          ],
+          "collaboration_score": 0.85,
+          "code_quality_score": 0.88
+        },
+        "summary": {
+          "total_repositories": 28,
+          "total_commits": 1247,
+          "primary_languages": [
+            "Python",
+            "Go",
+            "TypeScript"
+          ],
+          "collaboration_score": 0.85
+        },
+        "recommendations": [
+          "Continue excellent development practices"
+        ]
+      },
+      "error": null,
+      "duration": 0.0,
+      "timestamp": "2025-11-14T14:47:28.363044"
+    },
+    {
+      "test_name": "GitHub Analysis - James Chen",
+      "success": true,
+      "result": {
+        "developer": "james_chen",
+        "analysis_type": "github",
+        "time_range_months": 12,
+        "skill_assessment": {
+          "programming_languages": {
+            "JavaScript": {
+              "proficiency": 0.6,
+              "projects": 6
+            },
+            "TypeScript": {
+              "proficiency": 0.7,
+              "projects": 6
+            },
+            "CSS": {
+              "proficiency": 0.8,
+              "projects": 6
+            }
+          },
+          "frameworks": [
+            "React",
+            "Next.js",
+            "Node.js",
+            "Tailwind"
+          ],
+          "collaboration_score": 0.73,
+          "code_quality_score": 0.71
+        },
+        "summary": {
+          "total_repositories": 19,
+          "total_commits": 892,
+          "primary_languages": [
+            "JavaScript",
+            "TypeScript",
+            "CSS"
+          ],
+          "collaboration_score": 0.73
+        },
+        "recommendations": [
+          "Increase code review participation and mentoring",
+          "Consider contributing more to open source projects",
+          "Focus on improving code documentation and testing"
+        ]
+      },
+      "error": null,
+      "duration": 0.0,
+      "timestamp": "2025-11-14T14:47:28.363044"
+    },
+    {
+      "test_name": "GitHub Analysis - Alex Rodriguez",
+      "success": true,
+      "result": {
+        "developer": "alex_rodriguez",
+        "analysis_type": "github",
+        "time_range_months": 12,
+        "skill_assessment": {
+          "programming_languages": {
+            "Java": {
+              "proficiency": 0.6,
+              "projects": 8
+            },
+            "Kotlin": {
+              "proficiency": 0.7,
+              "projects": 8
+            },
+            "Python": {
+              "proficiency": 0.8,
+              "projects": 8
+            },
+            "JavaScript": {
+              "proficiency": 0.9,
+              "projects": 8
+            }
+          },
+          "frameworks": [
+            "Spring Boot",
+            "Android",
+            "React",
+            "Hibernate"
+          ],
+          "collaboration_score": 0.81,
+          "code_quality_score": 0.82
+        },
+        "summary": {
+          "total_repositories": 34,
+          "total_commits": 2156,
+          "primary_languages": [
+            "Java",
+            "Kotlin",
+            "Python"
+          ],
+          "collaboration_score": 0.81
+        },
+        "recommendations": [
+          "Focus on improving code documentation and testing"
+        ]
+      },
+      "error": null,
+      "duration": 0.0,
+      "timestamp": "2025-11-14T14:47:28.364041"
+    },
+    {
+      "test_name": "Jira Analysis - Sarah Martinez",
+      "success": true,
+      "result": {
+        "developer": "sarah.martinez@company.com",
+        "analysis_type": "jira",
+        "time_range_months": 6,
+        "skill_assessment": {
+          "technical_areas": {
+            "backend_development": 85,
+            "microservices": 85,
+            "api_design": 85
+          },
+          "business_domains": {
+            "fintech": 70,
+            "e_commerce": 70
+          },
+          "problem_solving_score": 0.86,
+          "efficiency_score": 1.0
+        },
+        "summary": {
+          "total_projects": 12,
+          "resolution_rate": 0.86,
+          "technical_areas": [
+            "backend_development",
+            "microservices",
+            "api_design"
+          ]
+        },
+        "collaboration_metrics": {
+          "resolution_rate": 0.86,
+          "avg_resolution_time": 14.2
+        },
+        "recommendations": [
+          "Maintain excellent project management skills"
+        ]
+      },
+      "error": null,
+      "duration": 0.0,
+      "timestamp": "2025-11-14T14:47:28.365038"
+    },
+    {
+      "test_name": "Jira Analysis - James Chen",
+      "success": true,
+      "result": {
+        "developer": "james.chen@company.com",
+        "analysis_type": "jira",
+        "time_range_months": 6,
+        "skill_assessment": {
+          "technical_areas": {
+            "frontend_development": 85,
+            "ui_ux": 85,
+            "testing": 85
+          },
+          "business_domains": {
+            "e_commerce": 70,
+            "media": 70
+          },
+          "problem_solving_score": 0.8,
+          "efficiency_score": 1.0
+        },
+        "summary": {
+          "total_projects": 8,
+          "resolution_rate": 0.8,
+          "technical_areas": [
+            "frontend_development",
+            "ui_ux",
+            "testing"
+          ]
+        },
+        "collaboration_metrics": {
+          "resolution_rate": 0.8,
+          "avg_resolution_time": 22.1
+        },
+        "recommendations": [
+          "Focus on improving issue resolution rate",
+          "Work on reducing average resolution time"
+        ]
+      },
+      "error": null,
+      "duration": 0.0,
+      "timestamp": "2025-11-14T14:47:28.365038"
+    },
+    {
+      "test_name": "Jira Analysis - Alex Rodriguez",
+      "success": true,
+      "result": {
+        "developer": "alex.rodriguez@company.com",
+        "analysis_type": "jira",
+        "time_range_months": 6,
+        "skill_assessment": {
+          "technical_areas": {
+            "full_stack": 85,
+            "mobile_development": 85,
+            "architecture": 85
+          },
+          "business_domains": {
+            "fintech": 70,
+            "healthcare": 70
+          },
+          "problem_solving_score": 0.89,
+          "efficiency_score": 1.0
+        },
+        "summary": {
+          "total_projects": 15,
+          "resolution_rate": 0.89,
+          "technical_areas": [
+            "full_stack",
+            "mobile_development",
+            "architecture"
+          ]
+        },
+        "collaboration_metrics": {
+          "resolution_rate": 0.89,
+          "avg_resolution_time": 16.8
+        },
+        "recommendations": [
+          "Maintain excellent project management skills"
+        ]
+      },
+      "error": null,
+      "duration": 0.0,
+      "timestamp": "2025-11-14T14:47:28.366036"
+    },
+    {
+      "test_name": "Developer Comparison - Sarah Martinez vs James Chen",
+      "success": true,
+      "result": {
+        "comparison_type": "github_skills",
+        "developers": {
+          "developer1": "sarah_martinez",
+          "developer2": "james_chen"
+        },
+        "comparison_result": {
+          "winner": "sarah_martinez",
+          "scores": {
+            "sarah_martinez": 0.752,
+            "james_chen": 0.6359999999999999
+          },
+          "score_difference": 0.1160000000000001,
+          "key_differences": [
+            "Developer 1 specializes in: Python, Go",
+            "Developer 2 specializes in: JavaScript, CSS",
+            "Developer 1 has stronger collaboration skills"
+          ]
+        },
+        "individual_assessments": {
+          "developer1": {
+            "developer": "sarah_martinez",
+            "analysis_type": "github",
+            "time_range_months": 12,
+            "skill_assessment": {
+              "programming_languages": {
+                "Python": {
+                  "proficiency": 0.6,
+                  "projects": 9
+                },
+                "Go": {
+                  "proficiency": 0.7,
+                  "projects": 9
+                },
+                "TypeScript": {
+                  "proficiency": 0.8,
+                  "projects": 9
+                }
+              },
+              "frameworks": [
+                "Django",
+                "FastAPI",
+                "React",
+                "PostgreSQL"
+              ],
+              "collaboration_score": 0.85,
+              "code_quality_score": 0.88
+            },
+            "summary": {
+              "total_repositories": 28,
+              "total_commits": 1247,
+              "primary_languages": [
+                "Python",
+                "Go",
+                "TypeScript"
+              ],
+              "collaboration_score": 0.85
+            },
+            "recommendations": [
+              "Continue excellent development practices"
+            ]
+          },
+          "developer2": {
+            "developer": "james_chen",
+            "analysis_type": "github",
+            "time_range_months": 12,
+            "skill_assessment": {
+              "programming_languages": {
+                "JavaScript": {
+                  "proficiency": 0.6,
+                  "projects": 6
+                },
+                "TypeScript": {
+                  "proficiency": 0.7,
+                  "projects": 6
+                },
+                "CSS": {
+                  "proficiency": 0.8,
+                  "projects": 6
+                }
+              },
+              "frameworks": [
+                "React",
+                "Next.js",
+                "Node.js",
+                "Tailwind"
+              ],
+              "collaboration_score": 0.73,
+              "code_quality_score": 0.71
+            },
+            "summary": {
+              "total_repositories": 19,
+              "total_commits": 892,
+              "primary_languages": [
+                "JavaScript",
+                "TypeScript",
+                "CSS"
+              ],
+              "collaboration_score": 0.73
+            },
+            "recommendations": [
+              "Increase code review participation and mentoring",
+              "Consider contributing more to open source projects",
+              "Focus on improving code documentation and testing"
+            ]
+          }
+        },
+        "recommendations": [
+          "Both developers show strong skills in their respective areas",
+          "sarah_martinez demonstrates slightly higher overall proficiency"
+        ]
+      },
+      "error": null,
+      "duration": 0.0,
+      "timestamp": "2025-11-14T14:47:28.366036"
+    },
+    {
+      "test_name": "Combined Analysis - Sarah Martinez",
+      "success": true,
+      "result": {
+        "developer_identifiers": {
+          "github_username": "sarah_martinez",
+          "jira_email": "sarah.martinez@company.com"
+        },
+        "combined_skill_assessment": {
+          "overall_score": 0.863,
+          "technical_skills": 0.82,
+          "collaboration_skills": 0.78,
+          "problem_solving": 0.85
+        },
+        "individual_assessments": {
+          "github": {
+            "developer": "sarah_martinez",
+            "analysis_type": "github",
+            "time_range_months": 12,
+            "skill_assessment": {
+              "programming_languages": {
+                "Python": {
+                  "proficiency": 0.6,
+                  "projects": 9
+                },
+                "Go": {
+                  "proficiency": 0.7,
+                  "projects": 9
+                },
+                "TypeScript": {
+                  "proficiency": 0.8,
+                  "projects": 9
+                }
+              },
+              "frameworks": [
+                "Django",
+                "FastAPI",
+                "React",
+                "PostgreSQL"
+              ],
+              "collaboration_score": 0.85,
+              "code_quality_score": 0.88
+            },
+            "summary": {
+              "total_repositories": 28,
+              "total_commits": 1247,
+              "primary_languages": [
+                "Python",
+                "Go",
+                "TypeScript"
+              ],
+              "collaboration_score": 0.85
+            },
+            "recommendations": [
+              "Continue excellent development practices"
+            ]
+          },
+          "jira": {
+            "developer": "sarah.martinez@company.com",
+            "analysis_type": "jira",
+            "time_range_months": 12,
+            "skill_assessment": {
+              "technical_areas": {
+                "backend_development": 85,
+                "microservices": 85,
+                "api_design": 85
+              },
+              "business_domains": {
+                "fintech": 70,
+                "e_commerce": 70
+              },
+              "problem_solving_score": 0.86,
+              "efficiency_score": 1.0
+            },
+            "summary": {
+              "total_projects": 12,
+              "resolution_rate": 0.86,
+              "technical_areas": [
+                "backend_development",
+                "microservices",
+                "api_design"
+              ]
+            },
+            "collaboration_metrics": {
+              "resolution_rate": 0.86,
+              "avg_resolution_time": 14.2
+            },
+            "recommendations": [
+              "Maintain excellent project management skills"
+            ]
+          }
+        },
+        "top_skills": [
+          "Backend Development",
+          "Problem Solving",
+          "Code Quality",
+          "Collaboration"
+        ],
+        "improvement_areas": [
+          "Frontend Technologies",
+          "Leadership Skills"
+        ],
+        "career_recommendations": [
+          "Consider senior developer or tech lead roles",
+          "Focus on architectural design skills",
+          "Mentor junior developers"
+        ]
+      },
+      "error": null,
+      "duration": 0.0,
+      "timestamp": "2025-11-14T14:47:28.367033"
+    }
+  ]
+}

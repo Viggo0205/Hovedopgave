@@ -37,12 +37,18 @@ class SkillLevel(str, Enum):
             return cls.INTERMEDIATE
         else:
             return cls.BEGINNER
+    
+    @classmethod
+    def from_confidence(cls, confidence: float) -> "SkillLevel":
+        """Convert a confidence score (0-1) to skill level."""
+        return cls.from_score(confidence)
 
 
 class SkillCategory(str, Enum):
     """Categories of skills that can be analyzed."""
     
     # Technical Skills
+    TECHNICAL = "technical"
     PROGRAMMING_LANGUAGE = "programming_language"
     FRAMEWORK = "framework"
     TOOL = "tool"
@@ -52,6 +58,7 @@ class SkillCategory(str, Enum):
     ARCHITECTURE = "architecture"
     
     # Soft Skills
+    SOFT_SKILL = "soft_skill"
     COMMUNICATION = "communication"
     LEADERSHIP = "leadership"
     PROBLEM_SOLVING = "problem_solving"

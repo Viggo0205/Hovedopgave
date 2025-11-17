@@ -7,6 +7,7 @@ based on their GitHub and Jira activity history.
 
 import logging
 import os
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from fastmcp import FastMCP
@@ -17,6 +18,12 @@ from .models.developer import DeveloperProfile, SkillAssessment
 from .analyzers.github_analyzer import GitHubAnalyzer
 from .analyzers.jira_analyzer import JiraAnalyzer
 from .analyzers.skill_processor import SkillProcessor
+from .mock_data import (
+    get_mock_github_data, 
+    get_mock_jira_data, 
+    MOCK_EMPLOYEES, 
+    MOCK_TECHNICAL_STACK
+)
 
 # Initialize logging
 logging.basicConfig(level=logging.INFO)
@@ -49,6 +56,21 @@ class DeveloperComparisonRequest(BaseModel):
     comparison_metrics: Optional[List[str]] = None
 
 
+class EmployeeListRequest(BaseModel):
+    """Request model for getting employee names"""
+    source: str = "all"  # "github", "jira", or "all"
+    include_metadata: bool = False
+    filter_active: bool = True
+
+
+class CapabilitiesRequest(BaseModel):
+    """Request model for overall capabilities analysis"""
+    team_name: Optional[str] = None
+    skill_categories: Optional[List[str]] = None
+    include_gaps: bool = True
+    aggregation_level: str = "team"  # "individual", "team", "organization"
+
+
 @mcp.tool()
 async def analyze_github_developer(
     username: str,
@@ -78,39 +100,102 @@ async def analyze_github_developer(
     """
     try:
         config = Config()
-        analyzer = GitHubAnalyzer(config.github_token)
         
-        logger.info(f"Starting GitHub analysis for user: {username}")
+        # Check if mock mode is enabled
+        if config.mock_mode:
+            logger.info(f"Using mock data for GitHub analysis: {username}")
+            
+            # Get mock GitHub data
+            mock_data = get_mock_github_data(username)
+            
+            # Create a realistic analysis result using mock data
+            analysis_result = {
+                "developer": username,
+                "analysis_type": "github_mock",
+                "data_source": "mock",
+                "time_range_months": time_range_months,
+                "github_profile": {
+                    "username": mock_data["username"],
+                    "name": mock_data["name"],
+                    "email": mock_data["email"]
+                },
+                "repositories_analyzed": len(mock_data["repositories"]),
+                "languages": mock_data["languages"],
+                "commit_stats": mock_data["commit_history"],
+                "skill_assessment": {
+                    "technical_skills": [],
+                    "collaboration_metrics": {
+                        "total_repositories": len(mock_data["repositories"]),
+                        "contribution_frequency": "High",
+                        "code_quality_indicators": "Good"
+                    }
+                },
+                "summary": {
+                    "primary_language": max(mock_data["languages"].items(), key=lambda x: x[1])[0],
+                    "total_commits": mock_data["commit_history"]["total_commits"],
+                    "activity_level": "Active" if mock_data["commit_history"]["commits_last_month"] > 20 else "Moderate"
+                },
+                "analysis_date": datetime.now().isoformat(),
+                "recommendations": [
+                    f"Strong in {max(mock_data['languages'].items(), key=lambda x: x[1])[0]}",
+                    "Active contributor with consistent commit history",
+                    "Consider expanding to additional languages"
+                ]
+            }
+            
+            # Add technical skills based on languages
+            for lang, percentage in mock_data["languages"].items():
+                if percentage > 0.1:  # Only include languages with >10% usage
+                    confidence = min(95, int(percentage * 100 + 20))
+                    level = "Expert" if percentage > 0.5 else "Advanced" if percentage > 0.3 else "Intermediate"
+                    
+                    analysis_result["skill_assessment"]["technical_skills"].append({
+                        "skill": lang,
+                        "level": level,
+                        "confidence": confidence,
+                        "evidence": f"{percentage:.0%} of code base",
+                        "commits": int(mock_data["commit_history"]["total_commits"] * percentage)
+                    })
+            
+            return analysis_result
         
-        # Perform the analysis
-        analysis_result = await analyzer.analyze_developer(
-            username=username,
-            repositories=repositories,
-            include_contributions=include_contributions,
-            time_range_months=time_range_months
-        )
-        
-        # Process skills using the skill processor
-        skill_processor = SkillProcessor()
-        skill_assessment = skill_processor.process_github_data(analysis_result)
-        
-        return {
-            "developer": username,
-            "analysis_type": "github",
-            "time_range_months": time_range_months,
-            "skill_assessment": skill_assessment,
-            "analysis_date": analysis_result.get("analysis_date"),
-            "summary": skill_assessment.get("summary", {}),
-            "detailed_skills": skill_assessment.get("skills", {}),
-            "recommendations": skill_assessment.get("recommendations", [])
-        }
+        else:
+            # Real API mode
+            analyzer = GitHubAnalyzer(config.github_token)
+            
+            logger.info(f"Starting real GitHub analysis for user: {username}")
+            
+            # Perform the analysis
+            analysis_result = await analyzer.analyze_developer(
+                username=username,
+                repositories=repositories,
+                include_contributions=include_contributions,
+                time_range_months=time_range_months
+            )
+            
+            # Process skills using the skill processor
+            skill_processor = SkillProcessor()
+            skill_assessment = skill_processor.process_github_data(analysis_result)
+            
+            return {
+                "developer": username,
+                "analysis_type": "github",
+                "data_source": "real_api",
+                "time_range_months": time_range_months,
+                "skill_assessment": skill_assessment,
+                "analysis_date": analysis_result.get("analysis_date"),
+                "summary": skill_assessment.get("summary", {}),
+                "detailed_skills": skill_assessment.get("skills", {}),
+                "recommendations": skill_assessment.get("recommendations", [])
+            }
         
     except Exception as e:
         logger.error(f"Error analyzing GitHub developer {username}: {str(e)}")
         return {
             "error": f"Failed to analyze GitHub developer: {str(e)}",
             "developer": username,
-            "analysis_type": "github"
+            "analysis_type": "github",
+            "data_source": "error"
         }
 
 
@@ -182,6 +267,169 @@ async def analyze_jira_developer(
             "error": f"Failed to analyze Jira developer: {str(e)}",
             "developer": email,
             "analysis_type": "jira"
+        }
+
+
+@mcp.tool()
+async def get_all_employees(
+    source: str = "all",
+    include_metadata: bool = False,
+    filter_active: bool = True
+) -> Dict[str, Any]:
+    """
+    Get a list of all employee names from GitHub and/or Jira.
+    
+    Args:
+        source: Data source ("github", "jira", or "all")
+        include_metadata: Include additional metadata about employees
+        filter_active: Only include active employees
+    
+    Returns:
+        Dictionary containing employee names and optional metadata
+    """
+    try:
+        logger.info(f"Fetching all employees from source: {source}")
+        
+        employees = {
+            "github_employees": [],
+            "jira_employees": [],
+            "total_count": 0,
+            "source": source,
+            "metadata": {}
+        }
+        
+        # Mock employee data for demonstration
+        # In a real implementation, this would query GitHub/Jira APIs
+        mock_github_employees = [
+            {
+                "username": "alice_dev",
+                "display_name": "Alice Johnson",
+                "role": "Senior Full-Stack Developer",
+                "team": "Frontend Team",
+                "last_activity": "2025-11-15",
+                "repositories": 24,
+                "total_commits": 1456
+            },
+            {
+                "username": "bob_backend",
+                "display_name": "Bob Smith",
+                "role": "Backend Developer",
+                "team": "API Team",
+                "last_activity": "2025-11-16",
+                "repositories": 18,
+                "total_commits": 892
+            },
+            {
+                "username": "carol_lead",
+                "display_name": "Carol Davis",
+                "role": "Technical Lead",
+                "team": "Architecture Team",
+                "last_activity": "2025-11-17",
+                "repositories": 35,
+                "total_commits": 2341
+            },
+            {
+                "username": "david_ml",
+                "display_name": "David Chen",
+                "role": "ML Engineer",
+                "team": "Data Science Team",
+                "last_activity": "2025-11-14",
+                "repositories": 12,
+                "total_commits": 567
+            },
+            {
+                "username": "eve_devops",
+                "display_name": "Eve Wilson",
+                "role": "DevOps Engineer",
+                "team": "Infrastructure Team",
+                "last_activity": "2025-11-17",
+                "repositories": 8,
+                "total_commits": 423
+            }
+        ]
+        
+        mock_jira_employees = [
+            {
+                "email": "alice.johnson@company.com",
+                "display_name": "Alice Johnson",
+                "role": "Senior Developer",
+                "team": "Frontend Team",
+                "last_activity": "2025-11-16",
+                "issues_resolved": 145,
+                "avg_resolution_time": 2.3
+            },
+            {
+                "email": "bob.smith@company.com",
+                "display_name": "Bob Smith",
+                "role": "Backend Developer",
+                "team": "API Team",
+                "last_activity": "2025-11-15",
+                "issues_resolved": 98,
+                "avg_resolution_time": 1.8
+            },
+            {
+                "email": "carol.davis@company.com",
+                "display_name": "Carol Davis",
+                "role": "Technical Lead",
+                "team": "Architecture Team",
+                "last_activity": "2025-11-17",
+                "issues_resolved": 67,
+                "avg_resolution_time": 3.1
+            }
+        ]
+        
+        # Filter and process based on source
+        if source in ["github", "all"]:
+            github_list = []
+            for emp in mock_github_employees:
+                if include_metadata:
+                    github_list.append(emp)
+                else:
+                    github_list.append({
+                        "username": emp["username"],
+                        "display_name": emp["display_name"],
+                        "team": emp["team"]
+                    })
+            employees["github_employees"] = github_list
+        
+        if source in ["jira", "all"]:
+            jira_list = []
+            for emp in mock_jira_employees:
+                if include_metadata:
+                    jira_list.append(emp)
+                else:
+                    jira_list.append({
+                        "email": emp["email"],
+                        "display_name": emp["display_name"],
+                        "team": emp["team"]
+                    })
+            employees["jira_employees"] = jira_list
+        
+        # Calculate totals
+        total_github = len(employees["github_employees"])
+        total_jira = len(employees["jira_employees"])
+        employees["total_count"] = total_github + total_jira
+        
+        # Add metadata
+        employees["metadata"] = {
+            "github_total": total_github,
+            "jira_total": total_jira,
+            "teams": list(set([emp.get("team", "Unknown") for emp in mock_github_employees + mock_jira_employees])),
+            "roles": list(set([emp.get("role", "Unknown") for emp in mock_github_employees + mock_jira_employees])),
+            "query_timestamp": "2025-11-17T10:30:00Z",
+            "include_metadata": include_metadata,
+            "filter_active": filter_active
+        }
+        
+        logger.info(f"Retrieved {employees['total_count']} employees from {source}")
+        return employees
+        
+    except Exception as e:
+        logger.error(f"Error getting employee list: {str(e)}")
+        return {
+            "error": f"Failed to get employee list: {str(e)}",
+            "source": source,
+            "total_count": 0
         }
 
 
@@ -306,14 +554,14 @@ async def compare_developers(
 
 
 # Resources
-@mcp.resource("developer-profiles")
+@mcp.resource("file://developer-profiles")
 async def get_developer_profiles() -> str:
     """Get available developer profiles and cached analyses."""
     # This would typically read from a database or cache
     return "Available developer profiles and cached skill analyses"
 
 
-@mcp.resource("skill-categories")
+@mcp.resource("file://skill-categories")
 async def get_skill_categories() -> str:
     """Get the categorization system used for skill analysis."""
     skill_processor = SkillProcessor()
@@ -412,6 +660,47 @@ Compare the two developers across these dimensions:
 - Role suitability assessment
 - Development recommendations for each developer
 """
+
+
+@mcp.tool()
+async def get_technical_stack() -> Dict[str, Any]:
+    """
+    Get the technical stack and technologies used across the organization.
+    
+    Returns comprehensive information about programming languages, frameworks,
+    tools, and their usage levels within the company.
+    """
+    try:
+        config = Config()
+        
+        if config.mock_mode:
+            logger.info("Returning mock technical stack data")
+            return {
+                "data_source": "mock",
+                "stack": MOCK_TECHNICAL_STACK,
+                "summary": {
+                    "total_technologies": sum(len(category) for category in MOCK_TECHNICAL_STACK.values()),
+                    "categories": list(MOCK_TECHNICAL_STACK.keys()),
+                    "most_used_language": "JavaScript",
+                    "most_used_framework": "React",
+                    "most_used_tool": "Git"
+                },
+                "analysis_date": datetime.now().isoformat()
+            }
+        else:
+            # Real analysis would aggregate from all developers
+            return {
+                "data_source": "aggregated",
+                "message": "Real technical stack analysis requires API credentials",
+                "mock_available": True
+            }
+            
+    except Exception as e:
+        logger.error(f"Error getting technical stack: {str(e)}")
+        return {
+            "error": f"Failed to get technical stack: {str(e)}",
+            "data_source": "error"
+        }
 
 
 def main() -> None:

@@ -1,0 +1,90 @@
+{
+  "name": "Developer Skill Analyzer MCP Server",
+  "version": "1.0.0",
+  "description": "AI-powered developer skill analysis from GitHub and Jira data",
+  "mcpServers": {
+    "developer-skill-analyzer": {
+      "command": "python",
+      "args": [
+        "c:\\Users\\victo\\Desktop\\Hovedopgave\\run_mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "c:\\Users\\victo\\Desktop\\Hovedopgave\\src"
+      }
+    }
+  },
+  "tools": [
+    {
+      "name": "analyze_github_developer",
+      "description": "Analyze developer skills from GitHub profile with AI enhancement",
+      "parameters": {
+        "github_username": "string",
+        "access_token": "string (optional)"
+      }
+    },
+    {
+      "name": "analyze_jira_developer", 
+      "description": "Analyze developer skills from Jira activity with AI enhancement",
+      "parameters": {
+        "jira_email": "string",
+        "jira_token": "string",
+        "jira_server": "string"
+      }
+    },
+    {
+      "name": "compare_developers",
+      "description": "AI-powered comparison of two developers",
+      "parameters": {
+        "developer1_github": "string",
+        "developer2_github": "string"
+      }
+    },
+    {
+      "name": "get_skill_summary",
+      "description": "Comprehensive skill summary with AI insights",
+      "parameters": {
+        "github_username": "string (optional)",
+        "jira_email": "string (optional)"
+      }
+    },
+    {
+      "name": "get_all_employees",
+      "description": "Get list of all employee names from GitHub and/or Jira",
+      "parameters": {
+        "source": "string (github/jira/all)",
+        "include_metadata": "boolean (optional)",
+        "filter_active": "boolean (optional)"
+      }
+    },
+    {
+      "name": "get_overall_capabilities",
+      "description": "Analyze overall team/organization capabilities and skill gaps",
+      "parameters": {
+        "team_name": "string (optional)",
+        "skill_categories": "array (optional)",
+        "include_gaps": "boolean (optional)",
+        "aggregation_level": "string (individual/team/organization)"
+      }
+    },
+    {
+      "name": "get_technical_stack",
+      "description": "Get focused list of programming languages and frameworks the company uses",
+      "parameters": {
+        "category": "string (languages/frameworks/tools/all)",
+        "include_proficiency": "boolean (optional)",
+        "min_coverage": "number (optional)",
+        "sort_by": "string (coverage/proficiency/experts)"
+      }
+    }
+  ],
+  "resources": [
+    {
+      "name": "developer-profiles",
+      "description": "Available developer profiles and cached analyses"
+    },
+    {
+      "name": "skill-categories", 
+      "description": "Skill categorization system used for analysis"
+    }
+  ]
+}
