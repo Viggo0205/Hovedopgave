@@ -9,6 +9,5 @@ __version__ = "0.1.0"
 __author__ = "Victor"
 __email__ = "victor@example.com"
 
-from .server import main
-
-__all__ = ["main"]
+# Do NOT import server (requires fastmcp, not needed for tests)
+__all__ = []
