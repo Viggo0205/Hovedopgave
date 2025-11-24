@@ -1,5 +1,43 @@
 """
-GitHub data analyzer for extracting developer skills and metrics.
+GitHub Repository and Profile Analyzer for Developer Skill Assessment.
+
+This module provides comprehensive analysis of GitHub data for skill extraction,
+including repository analysis, commit patterns, collaboration metrics, and
+technology stack identification.
+
+Key Capabilities:
+1. Repository Analysis:
+   - Programming language detection and usage statistics
+   - Code complexity and quality metrics
+   - Project structure and architectural patterns
+   - Documentation and testing practices
+
+2. User Profile Analysis:
+   - Overall coding activity and consistency
+   - Technology preferences and expertise areas
+   - Open source contribution patterns
+   - Leadership and mentoring indicators
+
+3. Collaboration Analysis:
+   - Team involvement and communication patterns
+   - Code review participation
+   - Issue resolution and project management
+   - Knowledge sharing and documentation
+
+4. Skill Extraction:
+   - Programming languages with proficiency levels
+   - Frameworks, libraries, and tools usage
+   - Development methodologies and practices
+   - Domain expertise identification
+
+5. Technical Features:
+   - GitHub API integration with rate limiting
+   - Mock data support for testing
+   - Caching for performance optimization
+   - Error handling and fallback mechanisms
+
+Author: Developer Skill Analyzer Project
+Version: Enhanced with comprehensive skill analysis capabilities
 """
 
 import logging

@@ -1,8 +1,38 @@
 """
-MCP Server for Developer Skill Analysis
+FastMCP Server for Developer Skill Analysis - Main MCP Server Implementation.
 
-This server provides tools and resources for analyzing developer skills
-based on their GitHub and Jira activity history.
+This is the core MCP (Model Context Protocol) server that provides comprehensive
+developer skill analysis capabilities through structured tool interfaces.
+
+Server Architecture:
+1. MCP Tool Registration: Exposes analysis functions as MCP tools
+2. GitHub Integration: Repository analysis, commit patterns, language detection
+3. Jira Integration: Issue analysis, project involvement, task complexity
+4. Skill Processing: Advanced algorithms for skill extraction and proficiency assessment
+5. Data Aggregation: Combines multiple data sources for comprehensive analysis
+
+MCP Tools Provided:
+- analyze_github_user: Complete GitHub profile and repository analysis
+- analyze_repository: Detailed single repository analysis
+- analyze_jira_user: Jira activity and issue resolution analysis
+- assess_skills: Cross-platform skill assessment and gap analysis
+- get_skill_recommendations: Personalized learning recommendations
+
+Key Features:
+- Real-time API data fetching with fallback to mock data
+- Intelligent skill extraction from code and project metadata
+- Proficiency level assessment based on usage patterns
+- Collaborative analysis and team skill mapping
+- Performance metrics and productivity insights
+
+Configuration:
+- Supports both mock and real API modes
+- Configurable rate limiting and caching
+- Flexible analysis parameters
+- Comprehensive logging and error handling
+
+Author: Developer Skill Analyzer Project
+Version: Enhanced MCP server with comprehensive analysis capabilities
 """
 
 import logging

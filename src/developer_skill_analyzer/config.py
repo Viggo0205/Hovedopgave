@@ -1,5 +1,24 @@
 """
-Configuration management for the Developer Skill Analyzer.
+Configuration Management for Developer Skill Analyzer MCP Server.
+
+This module handles all configuration settings for the skill analysis system,
+including API keys, rate limiting, caching, and operational parameters.
+
+Configuration Sources:
+1. Environment variables (.env file)
+2. Default values for optional settings
+3. Runtime configuration validation
+
+Key Configuration Areas:
+- API Authentication (GitHub, Jira, OpenAI, etc.)
+- Rate Limiting and Request Management
+- Caching Configuration
+- Logging and Debugging
+- Analysis Parameters (time ranges, limits)
+- Mock Mode for Testing
+
+Author: Developer Skill Analyzer Project
+Version: Enhanced with comprehensive API management
 """
 
 import os
@@ -7,15 +26,37 @@ from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
+# This allows configuration through environment variables or .env file
 load_dotenv()
 
 
 class Config:
-    """Configuration class for the application."""
+    """
+    Centralized Configuration Management for the Developer Skill Analyzer.
+    
+    This class manages all configuration settings including:
+    - API credentials for external services
+    - Rate limiting and performance settings
+    - Analysis parameters and limits
+    - Caching and logging configuration
+    - Mock mode for testing without real API calls
+    
+    All settings are loaded from environment variables with sensible defaults.
+    """
     
     def __init__(self):
-        """Initialize configuration from environment variables."""
-        # Mock Mode Configuration
+        """
+        Initialize configuration by loading all settings from environment variables.
+        
+        Environment Variables:
+        - MOCK_MODE: Enable/disable mock data for testing (default: true)
+        - GITHUB_ACCESS_TOKEN: GitHub API authentication token
+        - JIRA_SERVER_URL, JIRA_EMAIL, JIRA_API_TOKEN: Jira API settings
+        - API rate limiting and caching settings
+        - Analysis parameters (time ranges, result limits)
+        """
+        # Mock Mode Configuration - allows testing without real API calls
+        # When enabled, uses mock data instead of making actual API requests
         self.mock_mode: bool = os.getenv("MOCK_MODE", "true").lower() == "true"
         
         # GitHub API Configuration
