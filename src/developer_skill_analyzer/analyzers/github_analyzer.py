@@ -46,7 +46,7 @@ from datetime import datetime, timedelta
 from typing import Dict, List, Optional, Any
 from collections import defaultdict, Counter
 
-from github import Github, GithubException
+from github import Github, GithubException, Auth
 from github.Repository import Repository
 from github.Commit import Commit
 from github.PullRequest import PullRequest
@@ -66,7 +66,9 @@ class GitHubAnalyzer:
         Args:
             access_token: GitHub personal access token
         """
-        self.github = Github(access_token)
+        # Use new PyGithub authentication method to avoid deprecation warnings
+        auth = Auth.Token(access_token)
+        self.github = Github(auth=auth)
         self.rate_limit_buffer = 100  # Reserve some requests for safety
     
     async def analyze_developer(
@@ -196,11 +198,15 @@ class GitHubAnalyzer:
     ) -> Optional[RepositoryAnalysis]:
         """Analyze a single repository for the developer's contributions."""
         try:
-            # Check rate limits
-            rate_limit = self.github.get_rate_limit()
-            if rate_limit.core.remaining < self.rate_limit_buffer:
-                logger.warning("Approaching GitHub rate limit, skipping detailed analysis")
-                return None
+            # Check rate limits (simplified check)
+            try:
+                rate_limit = self.github.get_rate_limit()
+                remaining = getattr(rate_limit, 'core', rate_limit).remaining
+                if remaining < self.rate_limit_buffer:
+                    logger.warning("Approaching GitHub rate limit, skipping detailed analysis")
+                    return None
+            except Exception as e:
+                logger.warning(f"Could not check rate limit: {e}, continuing anyway")
             
             # Get basic repository info
             repo_analysis = RepositoryAnalysis(
@@ -267,10 +273,26 @@ class GitHubAnalyzer:
         }
         
         try:
-            commits = repo.get_commits(author=username, since=since_date)
+            # Get all commits in the time range, then filter by user
+            # This handles cases where Git author name differs from GitHub username
+            commits = repo.get_commits(since=since_date)
             commit_dates = []
             
             for commit in commits:
+                # Check if this commit is by the target user
+                # Check both GitHub user and repository ownership
+                is_user_commit = False
+                
+                # Method 1: Check GitHub user association
+                if commit.author and commit.author.login == username:
+                    is_user_commit = True
+                
+                # Method 2: For repository owners, count all commits in their repos
+                elif repo.owner.login == username:
+                    is_user_commit = True
+                
+                if not is_user_commit:
+                    continue
                 commits_data['count'] += 1
                 commit_dates.append(commit.commit.author.date)
                 

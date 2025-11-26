@@ -740,6 +740,28 @@ def main() -> None:
     # Load configuration
     config = Config()
     
+    # Check if GitHub token needs to be loaded from environment
+    # This ensures proper configuration for Claude Desktop
+    if not config.github_token or config.mock_mode:
+        logger.warning("Loading GitHub token from environment variables")
+        env_token = os.environ.get('GITHUB_TOKEN')
+        if env_token:
+            config.github_token = env_token
+            config.mock_mode = False
+            os.environ['MOCK_MODE'] = 'false'
+        else:
+            logger.error("No GitHub token found in environment variables")
+    
+    # Debug: Log configuration state
+    logger.info(f"=== MCP SERVER STARTUP DEBUG ===")
+    logger.info(f"Mock mode: {config.mock_mode}")
+    logger.info(f"GitHub token configured: {'Yes' if config.github_token else 'No'}")
+    if config.github_token:
+        logger.info(f"GitHub token starts with: {config.github_token[:10]}...")
+    logger.info(f"MOCK_MODE env var: {os.getenv('MOCK_MODE')}")
+    logger.info(f"GITHUB_TOKEN env var: {'Set' if os.getenv('GITHUB_TOKEN') else 'Not set'}")
+    logger.info(f"EMERGENCY OVERRIDE ACTIVE: Bypassing all env var issues")
+    
     # Validate required environment variables
     if not config.github_token:
         logger.warning("GitHub token not configured - GitHub analysis will be limited")

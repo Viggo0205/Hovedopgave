@@ -57,10 +57,18 @@ class Config:
         """
         # Mock Mode Configuration - allows testing without real API calls
         # When enabled, uses mock data instead of making actual API requests
-        self.mock_mode: bool = os.getenv("MOCK_MODE", "true").lower() == "true"
+        mock_mode_env = os.getenv("MOCK_MODE", "true").lower()
+        self.mock_mode: bool = mock_mode_env == "true"
         
         # GitHub API Configuration
-        self.github_token: Optional[str] = os.getenv("GITHUB_ACCESS_TOKEN") or os.getenv("GITHUB_TOKEN")
+        self.github_token: Optional[str] = (
+            os.getenv("GITHUB_ACCESS_TOKEN") or 
+            os.getenv("GITHUB_TOKEN")
+        )
+        
+        # Force real mode for Claude Desktop if we have a valid token
+        if self.github_token and self.github_token.startswith("ghp_"):
+            self.mock_mode = False
         
         # Jira API Configuration
         self.jira_server_url: Optional[str] = os.getenv("JIRA_SERVER_URL")

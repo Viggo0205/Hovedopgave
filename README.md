@@ -2,9 +2,21 @@
 
 A Model Context Protocol (MCP) server that analyzes developer skills based on GitHub and Jira data, with multi-AI client support.
 
-## 🚀 Quick Start
+## 🚀 Quick Setup
 
-### 1. Run the MCP Client
+### 1. Configure Environment
+```bash
+# Copy the example environment file
+cp .env.example .env
+
+# Edit .env and add your GitHub Personal Access Token
+# GITHUB_TOKEN=your_actual_github_token_here
+# MOCK_MODE=false
+```
+
+### 2. Quick Start
+
+#### Run the MCP Client
 ```powershell
 python mcp_client.py
 ```
