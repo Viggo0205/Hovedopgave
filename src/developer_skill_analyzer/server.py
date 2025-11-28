@@ -19,14 +19,14 @@ MCP Tools Provided:
 - get_skill_recommendations: Personalized learning recommendations
 
 Key Features:
-- Real-time API data fetching with fallback to mock data
+- Real-time API data fetching from GitHub and Jira
 - Intelligent skill extraction from code and project metadata
 - Proficiency level assessment based on usage patterns
 - Collaborative analysis and team skill mapping
 - Performance metrics and productivity insights
 
 Configuration:
-- Supports both mock and real API modes
+- GitHub and Jira API integration
 - Configurable rate limiting and caching
 - Flexible analysis parameters
 - Comprehensive logging and error handling
@@ -35,10 +35,14 @@ Author: Developer Skill Analyzer Project
 Version: Enhanced MCP server with comprehensive analysis capabilities
 """
 
+import asyncio
 import logging
 import os
+import sys
 from datetime import datetime
 from typing import Any, Dict, List, Optional
+from contextlib import redirect_stdout
+from io import StringIO
 
 from fastmcp import FastMCP
 from pydantic import BaseModel
@@ -49,12 +53,27 @@ from .analyzers.github_analyzer import GitHubAnalyzer
 from .analyzers.jira_analyzer import JiraAnalyzer
 from .analyzers.skill_processor import SkillProcessor
 
-# Initialize logging
-logging.basicConfig(level=logging.INFO)
+# Initialize logging - completely disable logging to prevent any stdout interference
+logging.basicConfig(
+    level=logging.CRITICAL,  # Only show critical errors
+    handlers=[
+        logging.NullHandler(),  # Discard all log messages completely
+    ]
+)
 logger = logging.getLogger(__name__)
+logger.disabled = True  # Completely disable this logger
 
 # Initialize MCP server
 mcp = FastMCP("Developer Skill Analyzer")
+
+# Utility function to suppress stdout during tool execution
+def suppress_stdout(func):
+    """Decorator to suppress all stdout output during function execution."""
+    async def wrapper(*args, **kwargs):
+        # Redirect stdout to a StringIO buffer to discard it
+        with redirect_stdout(StringIO()):
+            return await func(*args, **kwargs)
+    return wrapper
 
 
 class GitHubAnalysisRequest(BaseModel):
@@ -240,15 +259,18 @@ async def get_all_employees(
     filter_active: bool = True
 ) -> Dict[str, Any]:
     """
-    Get a list of all employee names from GitHub and/or Jira.
+    Discover all collaborators and team members from GitHub repositories and/or Jira projects.
+    
+    This function searches across accessible repositories to find all collaborators,
+    contributors, and team members who have worked on projects.
     
     Args:
         source: Data source ("github", "jira", or "all")
-        include_metadata: Include additional metadata about employees
-        filter_active: Only include active employees
+        include_metadata: Include additional metadata (commit counts, last activity, etc.)
+        filter_active: Only include recently active collaborators
     
     Returns:
-        Dictionary containing employee names and optional metadata
+        Dictionary containing discovered collaborators and team members with optional metadata
     """
     try:
         logger.info(f"Fetching all employees from source: {source}")
@@ -262,29 +284,49 @@ async def get_all_employees(
             "metadata": {}
         }
         
-        # Get real employees from GitHub API
+        # Discover collaborators from GitHub repositories
         if source in ["github", "all"] and config.github_token:
             try:
+                logger.info("Starting GitHub collaborator discovery across repositories...")
                 analyzer = GitHubAnalyzer(config.github_token)
-                github_employees = await analyzer.discover_collaborators(include_metadata=include_metadata)
+                
+                # Use asyncio.wait_for to add timeout (5 minutes max)
+                github_employees = await asyncio.wait_for(
+                    analyzer.discover_collaborators(
+                        include_metadata=include_metadata,
+                        filter_active=filter_active,
+                        max_repositories=15  # Limit to 15 repositories for faster results
+                    ),
+                    timeout=300  # 5 minute timeout
+                )
                 employees["github_employees"] = github_employees
-                logger.info(f"Found {len(github_employees)} GitHub collaborators")
+                logger.info(f"Successfully discovered {len(github_employees)} GitHub collaborators")
+                
+                if include_metadata and github_employees:
+                    logger.info(f"Metadata included: commits, repositories, last activity")
+                    
             except Exception as e:
-                logger.error(f"Failed to get GitHub employees: {e}")
+                logger.error(f"Failed to discover GitHub collaborators: {e}")
+                logger.error(f"This may be due to API rate limits or repository access permissions")
                 employees["github_employees"] = []
         
         if source in ["jira", "all"] and config.jira_server_url:
             try:
+                logger.info("Starting Jira user discovery across projects...")
                 jira_analyzer = JiraAnalyzer(
                     server_url=config.jira_server_url,
                     email=config.jira_email,
                     api_token=config.jira_api_token
                 )
-                jira_employees = await jira_analyzer.discover_users(include_metadata=include_metadata)
+                jira_employees = await jira_analyzer.discover_users(
+                    include_metadata=include_metadata,
+                    filter_active=filter_active
+                )
                 employees["jira_employees"] = jira_employees
-                logger.info(f"Found {len(jira_employees)} Jira users")
+                logger.info(f"Successfully discovered {len(jira_employees)} Jira team members")
             except Exception as e:
-                logger.error(f"Failed to get Jira employees: {e}")
+                logger.error(f"Failed to discover Jira users: {e}")
+                logger.error(f"This may be due to Jira permissions or API configuration")
                 employees["jira_employees"] = []
         
         # Calculate totals
@@ -584,8 +626,88 @@ async def get_technical_stack() -> Dict[str, Any]:
         }
 
 
+async def test_tools_directly():
+    """Direct testing mode - test MCP tools without MCP framework."""
+    print("🧪 DIRECT TOOL TESTING MODE")
+    print("=" * 50)
+    
+    while True:
+        print("\nAvailable tools:")
+        print("1. get_all_employees - Discover collaborators")
+        print("2. analyze_github_developer - Analyze a developer")
+        print("3. get_technical_stack - Organization tech stack")
+        print("4. get_skill_summary - Combined skill assessment")
+        print("5. compare_developers - Compare two developers")
+        print("0. Exit")
+        
+        choice = input("\nEnter choice (0-5): ").strip()
+        
+        if choice == "0":
+            print("Exiting direct test mode...")
+            break
+        
+        elif choice == "1":
+            print("\n--- Testing get_all_employees ---")
+            source = input("Source (github/jira/all) [github]: ").strip() or "github"
+            metadata = input("Include metadata? (y/n) [n]: ").strip().lower() == 'y'
+            active = input("Filter active only? (y/n) [y]: ").strip().lower() != 'n'
+            
+            result = await get_all_employees(source=source, include_metadata=True, filter_active=active)
+            print(f"\nResult: {result}")
+        
+        elif choice == "2":
+            print("\n--- Testing analyze_github_developer ---")
+            username = input("GitHub username: ").strip()
+            if username:
+                months = input("Time range months [12]: ").strip() or "12"
+                try:
+                    months = int(months)
+                    result = await analyze_github_developer(username=username, time_range_months=months)
+                    print(f"\nResult: {result}")
+                except ValueError:
+                    print("Invalid number of months")
+            else:
+                print("Username required")
+        
+        elif choice == "3":
+            print("\n--- Testing get_technical_stack ---")
+            result = await get_technical_stack()
+            print(f"\nResult: {result}")
+        
+        elif choice == "4":
+            print("\n--- Testing get_skill_summary ---")
+            github_user = input("GitHub username (optional): ").strip() or None
+            jira_email = input("Jira email (optional): ").strip() or None
+            
+            if github_user or jira_email:
+                result = await get_skill_summary(github_username=github_user, jira_email=jira_email)
+                print(f"\nResult: {result}")
+            else:
+                print("At least one identifier required")
+        
+        elif choice == "5":
+            print("\n--- Testing compare_developers ---")
+            dev1 = input("First developer GitHub username: ").strip()
+            dev2 = input("Second developer GitHub username: ").strip()
+            
+            if dev1 and dev2:
+                result = await compare_developers(developer1_github=dev1, developer2_github=dev2)
+                print(f"\nResult: {result}")
+            else:
+                print("Both usernames required")
+        
+        else:
+            print("Invalid choice")
+
+
 def main() -> None:
     """Main entry point for the MCP server."""
+    # Check if running in direct test mode
+    if len(sys.argv) > 1 and sys.argv[1] == "--test":
+        print("Starting in direct test mode...")
+        asyncio.run(test_tools_directly())
+        return
+    
     logger.info("Starting Developer Skill Analyzer MCP Server...")
     
     # Load configuration

@@ -54,6 +54,7 @@ from github.PullRequest import PullRequest
 from ..models.analysis import GitHubAnalysisResult, RepositoryAnalysis
 
 logger = logging.getLogger(__name__)
+logger.disabled = True  # Disable logging to prevent stdout interference
 
 
 class GitHubAnalyzer:
@@ -527,3 +528,242 @@ class GitHubAnalyzer:
         ])
         
         return documented_repos / len(repositories)
+    
+    async def discover_collaborators(
+        self, 
+        include_metadata: bool = False,
+        filter_active: bool = True,
+        max_repositories: int = 20
+    ) -> List[Any]:
+        """
+        Discover all collaborators across the authenticated user's repositories.
+        
+        This method searches through accessible repositories to find collaborators,
+        contributors, and team members who have worked on projects.
+        
+        Args:
+            include_metadata: Include additional metadata (commit counts, last activity, etc.)
+            filter_active: Only include recently active collaborators
+            max_repositories: Maximum number of repositories to analyze (prevents timeout)
+        
+        Returns:
+            List of collaborators with optional metadata
+        """
+        try:
+            logger.info("Starting collaborator discovery across repositories...")
+            
+            collaborators_data = {}
+            current_user = self.github.get_user()
+            
+            # Get repositories but limit the number to prevent timeout
+            repositories = list(current_user.get_repos(type='all'))
+            
+            # Prioritize more recent/active repositories
+            repositories.sort(key=lambda r: r.updated_at, reverse=True)
+            
+            # Limit repositories to analyze
+            if len(repositories) > max_repositories:
+                repositories = repositories[:max_repositories]
+                logger.info(f"Limited analysis to {max_repositories} most recent repositories")
+            
+            logger.info(f"Analyzing {len(repositories)} repositories for collaborators...")
+            
+            for i, repo in enumerate(repositories):
+                logger.info(f"Processing repository {i+1}/{len(repositories)}: {repo.name}")
+                try:
+                    # Get collaborators for this repository
+                    repo_collaborators = list(repo.get_collaborators())
+                    
+                    for collaborator in repo_collaborators:
+                        username = collaborator.login
+                        
+                        if username not in collaborators_data:
+                            collaborators_data[username] = {
+                                'username': username,
+                                'name': collaborator.name or username,
+                                'repositories': [],
+                                'total_repositories': 0,
+                                'commit_count': 0,
+                                'last_activity': None
+                            }
+                        
+                        # Add this repository to the collaborator's data
+                        collaborators_data[username]['repositories'].append({
+                            'name': repo.name,
+                            'url': repo.html_url,
+                            'language': repo.language,
+                            'stars': repo.stargazers_count
+                        })
+                        collaborators_data[username]['total_repositories'] += 1
+                        
+                        # If metadata is requested, get more detailed information (but limit API calls)
+                        if include_metadata:
+                            try:
+                                # Get recent commits by this collaborator (limit to 5 to speed up)
+                                commits = list(repo.get_commits(author=collaborator, since=datetime.now() - timedelta(days=90)))[:5]
+                                collaborators_data[username]['commit_count'] += len(commits)
+                                
+                                if commits:
+                                    latest_commit_date = commits[0].commit.author.date
+                                    if (not collaborators_data[username]['last_activity'] or 
+                                        latest_commit_date > collaborators_data[username]['last_activity']):
+                                        collaborators_data[username]['last_activity'] = latest_commit_date.isoformat()
+                                        
+                            except Exception as e:
+                                logger.debug(f"Could not get commit data for {username} in {repo.name}: {e}")
+                                # Don't fail the entire process for individual commit failures
+                                pass
+                    
+                except Exception as e:
+                    logger.debug(f"Could not access collaborators for repository {repo.name}: {e}")
+                    continue
+            
+            # Convert to list and apply filtering
+            collaborators_list = list(collaborators_data.values())
+            
+            # Filter out inactive collaborators if requested
+            if filter_active and include_metadata:
+                cutoff_date = datetime.now() - timedelta(days=180)  # 6 months
+                collaborators_list = [
+                    c for c in collaborators_list 
+                    if (c.get('last_activity') and 
+                        datetime.fromisoformat(c['last_activity'].replace('Z', '+00:00')) > cutoff_date)
+                ]
+            
+            # Sort by number of repositories (most active first)
+            collaborators_list.sort(key=lambda x: x['total_repositories'], reverse=True)
+            
+            logger.info(f"Discovered {len(collaborators_list)} collaborators")
+            
+            # Return simple list of usernames if no metadata requested
+            if not include_metadata:
+                return [collab['username'] for collab in collaborators_list]
+            
+            return collaborators_list
+            
+        except Exception as e:
+            logger.error(f"Error discovering collaborators: {e}")
+            return []
+    
+    async def get_organization_tech_stack(self) -> Dict[str, Any]:
+        """
+        Analyze the technical stack across all accessible repositories.
+        
+        Returns comprehensive information about programming languages, frameworks,
+        tools, and technologies used across the organization.
+        
+        Returns:
+            Dictionary containing technology stack analysis
+        """
+        try:
+            logger.info("Analyzing organization-wide technical stack...")
+            
+            tech_stack = {
+                'programming_languages': defaultdict(int),
+                'frameworks': defaultdict(int),
+                'tools': defaultdict(int),
+                'databases': defaultdict(int),
+                'topics': defaultdict(int)
+            }
+            
+            current_user = self.github.get_user()
+            repositories = list(current_user.get_repos(type='all'))
+            
+            analyzed_repos = 0
+            
+            for repo in repositories:
+                try:
+                    analyzed_repos += 1
+                    
+                    # Get programming languages
+                    languages = repo.get_languages()
+                    for language, bytes_count in languages.items():
+                        tech_stack['programming_languages'][language] += bytes_count
+                    
+                    # Get topics (tags)
+                    topics = repo.get_topics()
+                    for topic in topics:
+                        tech_stack['topics'][topic] += 1
+                    
+                    # Analyze README for framework mentions
+                    try:
+                        readme = repo.get_readme()
+                        readme_content = readme.decoded_content.decode('utf-8').lower()
+                        
+                        # Common frameworks to detect
+                        frameworks = [
+                            'react', 'angular', 'vue', 'django', 'flask', 'spring', 'express',
+                            'laravel', 'rails', 'symfony', 'jquery', 'bootstrap', 'tailwind',
+                            'nodejs', 'nextjs', 'nuxtjs', 'fastapi', 'gin', 'echo'
+                        ]
+                        
+                        for framework in frameworks:
+                            if framework in readme_content:
+                                tech_stack['frameworks'][framework] += 1
+                        
+                        # Common tools and databases
+                        tools = ['docker', 'kubernetes', 'jenkins', 'gitlab', 'travis', 'circleci']
+                        databases = ['mysql', 'postgresql', 'mongodb', 'redis', 'sqlite', 'oracle']
+                        
+                        for tool in tools:
+                            if tool in readme_content:
+                                tech_stack['tools'][tool] += 1
+                                
+                        for db in databases:
+                            if db in readme_content:
+                                tech_stack['databases'][db] += 1
+                                
+                    except Exception as e:
+                        logger.debug(f"Could not analyze README for {repo.name}: {e}")
+                    
+                except Exception as e:
+                    logger.debug(f"Could not analyze repository {repo.name}: {e}")
+                    continue
+            
+            # Convert defaultdicts to regular dicts and sort
+            result = {
+                'technologies': {
+                    'programming_languages': dict(sorted(
+                        tech_stack['programming_languages'].items(), 
+                        key=lambda x: x[1], reverse=True
+                    )),
+                    'frameworks': dict(sorted(
+                        tech_stack['frameworks'].items(),
+                        key=lambda x: x[1], reverse=True
+                    )),
+                    'tools': dict(sorted(
+                        tech_stack['tools'].items(),
+                        key=lambda x: x[1], reverse=True
+                    )),
+                    'databases': dict(sorted(
+                        tech_stack['databases'].items(),
+                        key=lambda x: x[1], reverse=True
+                    )),
+                    'topics': dict(sorted(
+                        tech_stack['topics'].items(),
+                        key=lambda x: x[1], reverse=True
+                    ))
+                },
+                'summary': {
+                    'total_languages': len(tech_stack['programming_languages']),
+                    'total_frameworks': len(tech_stack['frameworks']),
+                    'total_tools': len(tech_stack['tools']),
+                    'total_databases': len(tech_stack['databases']),
+                    'total_topics': len(tech_stack['topics']),
+                    'most_used_language': max(tech_stack['programming_languages'].items(), 
+                                            key=lambda x: x[1])[0] if tech_stack['programming_languages'] else 'Unknown',
+                    'repositories_analyzed': analyzed_repos
+                },
+                'repositories_count': analyzed_repos
+            }
+            
+            logger.info(f"Technical stack analysis complete: {analyzed_repos} repositories analyzed")
+            return result
+            
+        except Exception as e:
+            logger.error(f"Error analyzing technical stack: {e}")
+            return {
+                'technologies': {},
+                'summary': {},
+                'repositories_count': 0
+            }
