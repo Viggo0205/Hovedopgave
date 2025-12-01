@@ -73,8 +73,7 @@ class CompetenceLevel(str, Enum):
             self.COMPETENT: 3,
             self.PROFICIENT: 4,
             self.EXPERT: 5
-        }\r
-    )
+        }
         return mapping[self]
     
     @classmethod
@@ -117,7 +116,8 @@ class CalculationModel(BaseModel):
     collaboration_bonus: float = 1.1  # Multiplier for collaborative work
     innovation_bonus: float = 1.15    # Multiplier for innovative work
     
-    model_config = ConfigDict(\r\n        json_schema_extra={
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "Default Programming Language Model",
                 "version": "1.0",
@@ -131,11 +131,11 @@ class CalculationModel(BaseModel):
                     "quality": 0.10
                 }
             }
-        }\r
-    )
+        })
     
     def validate_weights(self) -> bool:
         """Validate that weights sum to 1.0."""
+
         total = sum(self.weights.values())
         return abs(total - 1.0) < 0.01  # Allow small floating point errors
 
@@ -174,8 +174,7 @@ class CompetenceCalculator:
                 CompetenceLevel.COMPETENT: 0.5,
                 CompetenceLevel.PROFICIENT: 0.7,
                 CompetenceLevel.EXPERT: 0.9
-            }
-        )
+            })
     
     def calculate_competence_level(
         self, 
@@ -414,8 +413,7 @@ class CompetenceCalculator:
             "levels_distribution": {},
             "average_score": 0.0,
             "calculation_timestamp": datetime.now().isoformat()
-        }\r
-    )
+        }
         
         total_score = 0.0
         level_counts = {}
@@ -435,14 +433,12 @@ class CompetenceCalculator:
         summary["model_used"] = {
             "name": self.model.name,
             "version": self.model.version
-        }\r
-    )
+        }
         
         return {
             "results": results,
             "summary": summary
-        }\r
-    )
+        }
     
     def get_model_info(self) -> Dict[str, Any]:
         """Get information about the current calculation model."""
@@ -462,8 +458,7 @@ class CompetenceCalculator:
                 "collaboration_bonus": self.model.collaboration_bonus,
                 "innovation_bonus": self.model.innovation_bonus
             }
-        }\r
-    )
+        }
     
     def update_model(self, new_model: CalculationModel) -> bool:
         """Update the calculation model."""
