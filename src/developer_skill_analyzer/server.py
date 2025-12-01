@@ -114,6 +114,12 @@ class CapabilitiesRequest(BaseModel):
     aggregation_level: str = "team"  # "individual", "team", "organization"
 
 
+class ServerControlRequest(BaseModel):
+    """Request model for server control operations"""
+    action: str  # "ping", "start", "stop", "status"
+    message: Optional[str] = None
+
+
 @mcp.tool()
 async def analyze_github_developer(
     username: str,
@@ -624,6 +630,112 @@ async def get_technical_stack() -> Dict[str, Any]:
             "error": f"Failed to get technical stack: {str(e)}",
             "data_source": "error"
         }
+
+
+@mcp.tool()
+async def ping_server() -> Dict[str, Any]:
+    """
+    Ping the MCP server to check if it's responding.
+    
+    Returns:
+        Server status and basic information
+    """
+    return {
+        "status": "online",
+        "message": "MCP Developer Skill Analyzer server is responding",
+        "timestamp": datetime.now().isoformat(),
+        "server_info": {
+            "name": "Developer Skill Analyzer",
+            "version": "1.0.0",
+            "tools_available": 9
+        }
+    }
+
+
+@mcp.tool()
+async def server_status() -> Dict[str, Any]:
+    """
+    Get detailed server status and configuration information.
+    
+    Returns:
+        Comprehensive server status including configuration and capabilities
+    """
+    try:
+        config = Config()
+        
+        return {
+            "status": "running",
+            "timestamp": datetime.now().isoformat(),
+            "configuration": {
+                "github_configured": bool(config.github_token),
+                "jira_configured": bool(config.jira_server_url and config.jira_email and config.jira_api_token)
+            },
+            "capabilities": {
+                "github_analysis": bool(config.github_token),
+                "jira_analysis": bool(config.jira_server_url and config.jira_email and config.jira_api_token),
+                "skill_processing": True,
+                "employee_discovery": True,
+                "developer_comparison": True
+            },
+            "tools": [
+                "analyze_github_developer",
+                "analyze_jira_developer", 
+                "get_all_employees",
+                "get_skill_summary",
+                "compare_developers",
+                "get_technical_stack",
+                "ping_server",
+                "server_status",
+                "stop_server"
+            ]
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def stop_server(confirmation: bool = False) -> Dict[str, Any]:
+    """
+    Stop the MCP server gracefully.
+    
+    Args:
+        confirmation: Must be True to actually stop the server
+        
+    Returns:
+        Confirmation message and shutdown status
+    """
+    if not confirmation:
+        return {
+            "status": "confirmation_required",
+            "message": "Server stop requires confirmation parameter to be True",
+            "timestamp": datetime.now().isoformat(),
+            "warning": "This will shut down the MCP server and disconnect from Claude Desktop"
+        }
+    
+    # If confirmation is True, initiate shutdown
+    import os
+    import signal
+    
+    # Schedule shutdown after returning response
+    def delayed_shutdown():
+        import time
+        time.sleep(1)  # Give time for response to be sent
+        os.kill(os.getpid(), signal.SIGTERM)
+    
+    import threading
+    threading.Thread(target=delayed_shutdown, daemon=True).start()
+    
+    return {
+        "status": "shutting_down",
+        "message": "MCP server is shutting down gracefully...",
+        "timestamp": datetime.now().isoformat(),
+        "final_message": "Goodbye! Restart the server to reconnect."
+    }
 
 
 async def test_tools_directly():
