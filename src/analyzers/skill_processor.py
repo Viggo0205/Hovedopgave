@@ -7,10 +7,10 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from collections import defaultdict, Counter
 
-from ..models.skills import (
+from models.skills import (
     Skill, SkillLevel, SkillCategory, SkillEvidence, SkillAssessment, SkillGap
 )
-from ..models.analysis import GitHubAnalysisResult, JiraAnalysisResult
+from models.analysis import GitHubAnalysisResult, JiraAnalysisResult
 
 logger = logging.getLogger(__name__)
 

@@ -1,11 +1,13 @@
 {
   "mcpServers": {
-    "developer-skill-analyzer": {
-      "command": "c:\\Users\\victo\\Desktop\\Hovedopgave\\start_mcp_server.bat",
-      "env": {
-        "GITHUB_TOKEN": "loaded-from-env-file",
-        "MOCK_MODE": "false"
-      }
+    "Hovedopgave": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "C:\\Users\\tobia\\OneDrive - Zealand\\datamatiker\\Hovedopgave\\Hovedopgave",
+        "run",
+        "src/server.py"
+      ]
     }
   }
 }

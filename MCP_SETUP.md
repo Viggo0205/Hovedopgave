@@ -1,125 +1,156 @@
-# MCP Integration Setup Guide
+# MCP Server Setup Guide
+## 🚀 Quick Start - Developer Skill Analyzer
 
-## 🚀 Quick Start - MCP Server Integration
+This MCP server analyzes developer skills based on GitHub activity using FastMCP.
 
-Your system is now configured for proper MCP integration! Here's how to use it:
+### 1. Setup Environment
+```bash
+# Clone the repository
+git clone https://github.com/Viggo0205/Hovedopgave.git
+cd Hovedopgave
 
-### 1. Test the MCP Server
-```powershell
-# Test the server functionality
-python test_mcp_server.py
+# Create virtual environment
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1  # Windows
+# source .venv/bin/activate  # Linux/Mac
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-### 2. Run the MCP Client (Direct Mode)
-```powershell
-# Run the client with MCP server integration
-python mcp_client.py
+### 2. Configure GitHub Token
+Create a `.env` file in the project root:
+```bash
+# .env file (create from .env.example)
+GITHUB_TOKEN=your_github_personal_access_token_here
 ```
+
+**Get GitHub Token:**
+1. Go to GitHub Settings → Developer settings → Personal access tokens
+2. Generate new token with `repo` and `user` scopes
+3. Copy token to `.env` file
 
 ### 3. Claude Desktop Integration
-
-#### Option A: Copy Configuration to Claude Desktop
-```powershell
-# Copy the configuration to Claude Desktop's config location
-# Location: %APPDATA%\Claude\claude_desktop_config.json
-cp json\claude_desktop_config.json %APPDATA%\Claude\claude_desktop_config.json
-```
-
-#### Option B: Manual Configuration
-Add this to your Claude Desktop configuration:
-
+Add this to your Claude Desktop configuration (`%APPDATA%\Claude\claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
     "developer-skill-analyzer": {
-      "command": "python", 
-      "args": [
-        "c:\\Users\\victo\\Desktop\\Hovedopgave\\run_mcp_server.py"
-      ],
+      "command": "python",
+      "args": ["-m", "src.mcp.server"],
+      "cwd": "C:\\path\\to\\your\\Hovedopgave",
       "env": {
-        "PYTHONPATH": "c:\\Users\\victo\\Desktop\\Hovedopgave\\src",
-        "MOCK_MODE": "false",
-        "GITHUB_TOKEN": "loaded-from-env-file"
+        "PYTHONPATH": "C:\\path\\to\\your\\Hovedopgave\\src"
       }
     }
   }
 }
 ```
 
-### 4. Configure GitHub Token
+**Replace `C:\\path\\to\\your\\Hovedopgave` with your actual project path!**
 
-**Important**: Create a `.env` file in the project root directory:
-
-```bash
-# .env file (create this in the project root)
-GITHUB_TOKEN=your_actual_github_personal_access_token_here
-MOCK_MODE=false
-```
-
-**Security Notes**:
-- The `.env` file is already in `.gitignore` and won't be committed to version control
-- All configuration files will automatically load the token from this file
-- Never hardcode tokens directly in configuration files
-
-### 5. Available MCP Tools
-
+### 4. Available MCP Tools
 Once connected, Claude Desktop will have access to these tools:
 
-- **analyze_github_developer**: Real GitHub profile analysis
-- **analyze_jira_developer**: Jira activity analysis  
-- **get_skill_summary**: Combined GitHub + Jira skills
-- **compare_developers**: Developer skill comparison
-- **get_all_employees**: Team member discovery
-- **get_technical_stack**: Organization tech stack
+- **analyze_github_developer**: Comprehensive GitHub profile analysis
+  - Programming languages and skill levels (Expert/Advanced/Intermediate/Beginner)
+  - Repository count and activity metrics
+  - Expertise area categorization (Web Frontend, Backend, Mobile, etc.)
 
-### 5. Example Claude Desktop Usage
+- **get_github_profile**: Quick GitHub profile lookup
+  - Basic profile information
+  - Top 3 programming languages
+  - Repository statistics
 
+- **compare_developers**: Side-by-side developer comparison
+  - Language skills comparison
+  - Repository and activity differences
+  - Individual skill assessments
+
+### 5. Available MCP Resources
+- **github://available-languages**: List of all supported programming languages and categories
+
+### 6. Available MCP Prompts
+- **analyze-developer-skills**: Template for comprehensive developer skill analysis
+
+### 7. Example Claude Desktop Usage
 ```
-You: Analyze Viggo0205's GitHub profile
+You: Analyze the GitHub developer "octocat"
+Claude: I'll analyze octocat's GitHub profile using the developer skill analyzer.
+[Uses analyze_github_developer tool with real GitHub API data]
 
-Claude: I'll analyze Viggo0205's GitHub profile using the developer skill analyzer.
-[Uses analyze_github_developer tool with real GitHub data]
-
-You: Compare two developers' skills
-
-Claude: I'll compare their skill profiles.
+You: Compare developers "torvalds" and "gvanrossum"
+Claude: I'll compare their GitHub skill profiles.
 [Uses compare_developers tool]
 
-You: What's our team's technical stack?
-
-Claude: Let me get the current technical stack.
-[Uses get_technical_stack tool]
+You: Show me available programming languages
+Claude: Here are the supported programming languages...
+[Uses github://available-languages resource]
 ```
 
-## 🔧 Configuration Options
-
-### Environment Variables (.env):
-- `USE_REAL_MCP=true` - Enable MCP server integration
-- `MOCK_MODE=false` - Use real GitHub data
-- `DEFAULT_AI_MODE=claude` - Default to Claude AI
-- `GITHUB_TOKEN=your_token` - GitHub API access
-
-### Server Configuration:
-- Real GitHub API integration via PyGithub
-- FastMCP server with proper tool definitions
-- Automatic fallback to mock data if APIs fail
-- Comprehensive error handling and logging
-
-## 🎯 Architecture
-
+## 🏗️ Architecture
 ```
-Claude Desktop → MCP Protocol → run_mcp_server.py → server.py → GitHub API
-                                                              → Jira API
-                                                              → AI Analyzers
-                                                              → Skill Processing
+Claude Desktop → MCP Protocol → src/mcp/server.py → GitHubAnalyzer → GitHubService → GitHub API
+                                                  ↓
+                                            Language Categories (shared)
 ```
 
-## ✅ Verification Checklist
+### Project Structure:
+```
+src/
+├── mcp/
+│   └── server.py           # FastMCP server with tools/resources/prompts
+├── analyzers/
+│   ├── github_analyzer.py  # Business logic for GitHub analysis
+│   └── jira_analyzer.py    # Business logic for Jira analysis (future)
+├── services/
+│   ├── github_service.py   # Raw GitHub API data fetching
+│   └── jira_service.py     # Raw Jira API data fetching (future)
+├── models/
+│   ├── analysis.py         # Pydantic models for analysis results
+│   └── skills.py           # Skill-related models
+└── shared/
+    ├── config.py           # Environment configuration
+    └── language_categories.py  # Programming language categorization
+```
 
-1. ✅ MCP server starts without errors: `python run_mcp_server.py`
-2. ✅ Test script passes: `python test_mcp_server.py`
-3. ✅ Client connects: `python mcp_client.py`
-4. ✅ Claude Desktop shows tools: Check Claude Desktop after config
-5. ✅ Real data flows: GitHub token works, MOCK_MODE=false
+## 🔧 Supported Programming Languages
+The system categorizes languages into expertise areas:
 
-Your system is now a proper MCP server that Claude Desktop can connect to for real developer skill analysis!
+- **Programming Languages**: Python, Java, JavaScript, C#, C++, Go, Ruby, PHP, Swift, Kotlin
+- **Web Frontend**: HTML, CSS, TypeScript, Vue, React, Angular  
+- **Backend/Server**: Node.js, Django, Flask, Spring, ASP.NET
+- **Mobile Development**: Swift, Kotlin, Dart, React Native, Flutter
+- **Data/Analytics**: R, MATLAB, Jupyter Notebook, SQL
+
+## ✅ Testing Your Setup
+
+### Test 1: Import Check
+```powershell
+python -c "from src.mcp.server import main; print('✅ Server imports successfully')"
+```
+
+### Test 2: Claude Desktop Test
+1. Restart Claude Desktop after adding configuration
+2. Type: "Analyze the GitHub developer 'octocat'"
+3. If working, Claude will use your MCP tools and return analysis
+
+### Test 3: Check Available Tools
+In Claude Desktop, ask: "What MCP tools do you have access to?"
+
+## 🚨 Troubleshooting
+
+**"MCP server not available":**
+- Check Claude Desktop configuration path is correct
+- Ensure virtual environment is activated
+- Verify `.env` file exists with valid GitHub token
+
+**"Import errors":**
+- Check PYTHONPATH in Claude Desktop config
+- Ensure all dependencies are installed
+
+**"GitHub API rate limit":**
+- Verify GitHub token is valid
+- Check token has correct permissions (repo, user scopes)
+
+Your MCP server is now ready to analyze developer skills directly in Claude Desktop! 🎯
