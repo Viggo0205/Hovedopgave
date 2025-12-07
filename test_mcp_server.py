@@ -50,7 +50,10 @@ class TestResults:
                 print(f"      {result['details']}")
         
         # Determine overall status
-        if self.passed_tests >= self.total_tests * 0.9:  # 90% or higher
+        if self.total_tests == 0:
+            print("\n⚠️ STATUS: NO TESTS RUN")
+            print("No tests were executed. Please check your test setup.")
+        elif self.passed_tests >= self.total_tests * 0.9:  # 90% or higher
             print("\n🎉 STATUS: READY FOR PRODUCTION")
             self._print_success_guide()
         elif self.passed_tests >= self.total_tests * 0.7:  # 70% or higher
