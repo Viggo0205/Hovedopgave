@@ -65,9 +65,12 @@ class Config:
             issues.append("JIRA_API_TOKEN is missing or required for Jira analysis")
         
         if issues:
-            print("Configuration issues found:")
+            # Use logging instead of print to avoid interfering with MCP JSON output
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning("Configuration issues found:")
             for issue in issues:
-                print(f"  - {issue}")
+                logger.warning(f"  - {issue}")
             return False
         
         return True
