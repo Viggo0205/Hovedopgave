@@ -278,6 +278,325 @@ async def export_developer_profile(
         }
 
 
+@mcp.tool()
+async def get_all_employees(
+    source: str = "github",
+    include_metadata: bool = False
+) -> Dict[str, Any]:
+    """
+    Discover all collaborators and team members from GitHub repositories.
+    
+    Args:
+        source: Data source ("github" or "all")
+        include_metadata: Include additional metadata (commit counts, last activity)
+    
+    Returns:
+        Dictionary containing discovered collaborators with optional metadata
+    """
+    try:
+        logger.info(f"Fetching all employees from source: {source}")
+        
+        config = Config()
+        employees = {
+            "github_employees": [],
+            "total_count": 0,
+            "source": source
+        }
+        
+        if source in ["github", "all"] and config.github_token:
+            try:
+                github_service = GitHubService()
+                analyzer = GitHubAnalyzer(github_service)
+                
+                # Get authenticated user's organizations
+                from github import Github, Auth
+                auth = Auth.Token(config.github_token)
+                g = Github(auth=auth)
+                user = g.get_user()
+                
+                discovered = []
+                for org in user.get_orgs():
+                    members = github_service.get_organization_members(org.login)
+                    discovered.extend(members)
+                
+                # Deduplicate by username
+                unique_employees = {emp['username']: emp for emp in discovered}.values()
+                employees["github_employees"] = list(unique_employees)
+                employees["total_count"] = len(unique_employees)
+                
+                logger.info(f"Discovered {len(unique_employees)} GitHub collaborators")
+                
+            except Exception as e:
+                logger.error(f"Failed to discover GitHub collaborators: {e}")
+                employees["github_employees"] = []
+                employees["error"] = str(e)
+        
+        return employees
+        
+    except Exception as e:
+        logger.error(f"Error in get_all_employees: {str(e)}")
+        return {
+            "error": f"Failed to get employees: {str(e)}",
+            "source": source
+        }
+
+
+@mcp.tool()
+async def add_competence_to_database(
+    name: str,
+    category: str,
+    description: str = ""
+) -> Dict[str, Any]:
+    """
+    Add a new competence/skill to the database.
+    
+    Args:
+        name: Name of the competence (e.g., "React", "Python", "Leadership")
+        category: Category (programming_languages, frameworks_tools, databases, soft_skills, domain_knowledge)
+        description: Optional description of the competence
+        
+    Returns:
+        Confirmation with competence ID
+    """
+    try:
+        from developer_skill_analyzer.db.repository import DatabaseRepository
+        
+        db_repo = DatabaseRepository()
+        competence_id = db_repo.add_competence(name, category, description)
+        
+        return {
+            "status": "success",
+            "competence_id": competence_id,
+            "name": name,
+            "category": category,
+            "message": f"Successfully added competence '{name}' to category '{category}'",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error adding competence: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "name": name,
+            "category": category,
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def get_all_competences() -> Dict[str, Any]:
+    """
+    Retrieve all competences from the database.
+    
+    Returns the complete list of skills/competences organized by category.
+    
+    Returns:
+        All competences with their categories and descriptions
+    """
+    try:
+        from developer_skill_analyzer.db.repository import DatabaseRepository
+        
+        db_repo = DatabaseRepository()
+        competences = db_repo.get_all_competences()
+        
+        # Organize by category
+        by_category = {}
+        for comp in competences:
+            category = comp['category']
+            if category not in by_category:
+                by_category[category] = []
+            by_category[category].append({
+                'id': comp['id'],
+                'name': comp['name'],
+                'description': comp['description']
+            })
+        
+        return {
+            "status": "success",
+            "total_competences": len(competences),
+            "categories": len(by_category),
+            "competences_by_category": by_category,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting competences: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def get_user_competence_overview(
+    github_username: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Get a user's competence overview from the database.
+    
+    Args:
+        github_username: GitHub username to lookup
+        
+    Returns:
+        User's competence overview with ranks and percentages
+    """
+    try:
+        from developer_skill_analyzer.db.repository import DatabaseRepository
+        
+        db_repo = DatabaseRepository()
+        
+        # Get user ID
+        user = db_repo.get_user_by_identifier(github_username, None)
+        if not user:
+            return {
+                "status": "not_found",
+                "message": "User not found in database",
+                "github_username": github_username,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        user_id = user['id']
+        overview = db_repo.get_user_competence_overview(user_id)
+        
+        return {
+            "status": "success",
+            "user_info": {
+                "id": user['id'],
+                "github_username": user['github_username'],
+                "full_name": user.get('full_name'),
+                "display_name": user.get('display_name')
+            },
+            "total_competences": len(overview),
+            "competences": overview,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting user competence overview: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def save_analysis_to_database(
+    github_username: str,
+    full_name: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Analyze a developer and save results to the database.
+    
+    Args:
+        github_username: GitHub username for analysis
+        full_name: Developer's full name (optional)
+        
+    Returns:
+        Analysis results and database save confirmation
+    """
+    try:
+        from developer_skill_analyzer.db.repository import DatabaseRepository
+        from developer_skill_analyzer.analyzers.skill_processor import SkillProcessor
+        
+        # Perform GitHub analysis
+        github_service = GitHubService()
+        analyzer = GitHubAnalyzer(github_service)
+        analysis_result = await analyzer.analyze_developer(github_username)
+        
+        # Save to database
+        db_repo = DatabaseRepository()
+        skill_processor = SkillProcessor(db_repo)
+        
+        # Create or get user
+        user = db_repo.get_user_by_identifier(github_username, None)
+        if not user:
+            user_id = db_repo.create_user(
+                github_username=github_username,
+                full_name=full_name or github_username
+            )
+        else:
+            user_id = user['id']
+        
+        # Save analysis
+        analysis_id = db_repo.save_analysis(
+            user_id=user_id,
+            analysis_data=analysis_result,
+            source="github"
+        )
+        
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "analysis_id": analysis_id,
+            "github_username": github_username,
+            "message": "Analysis saved to database",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error saving analysis to database: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "github_username": github_username,
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def get_previous_analysis(
+    github_username: str
+) -> Dict[str, Any]:
+    """
+    Retrieve previous analysis versions from the database.
+    
+    Args:
+        github_username: GitHub username
+        
+    Returns:
+        All stored analysis versions for the user
+    """
+    try:
+        from developer_skill_analyzer.db.repository import DatabaseRepository
+        
+        db_repo = DatabaseRepository()
+        
+        # Get user
+        user = db_repo.get_user_by_identifier(github_username, None)
+        if not user:
+            return {
+                "status": "not_found",
+                "message": "No previous analyses found for this user",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Get all analyses
+        analyses = db_repo.get_all_analyses(user['id'])
+        
+        return {
+            "status": "success",
+            "user_info": {
+                "id": user['id'],
+                "github_username": user['github_username']
+            },
+            "total_versions": len(analyses),
+            "analyses": analyses,
+            "message": f"Found {len(analyses)} analysis version(s)",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error retrieving previous analysis: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
 @mcp.resource("github://available-languages")
 async def get_available_languages() -> str:
     """List all programming languages we can analyze dynamically from constants."""
