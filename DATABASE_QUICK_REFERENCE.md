@@ -4,7 +4,7 @@
 
 ### 1. Install PostgreSQL
 ```powershell
-# Download from: https://www.postgresql.org/download/
+# Download from: https://www.enterprisedb.com/downloads/postgres-postgresql-downloads
 # Default: postgres/postgres on port 5432
 ```
 
