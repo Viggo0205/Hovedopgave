@@ -3,6 +3,7 @@
 from typing import Dict, Any
 from github import Github, Auth
 from config import Config
+from shared.data_sanitizer import sanitize_developer_profile, sanitize_list
 
 
 
@@ -18,13 +19,14 @@ class GitHubService:
     def get_user_profile(self, username: str) -> Dict[str, Any]:
         """Get raw user profile data from GitHub."""
         user = self.github.get_user(username)
-        return {
+        profile = {
             "username": user.login,
             "name": user.name,
             "public_repos": user.public_repos,
             "followers": user.followers,
             "created_at": user.created_at.isoformat() if user.created_at else None
         }
+        return sanitize_developer_profile(profile)
     
     def get_user_repositories(self, username: str, limit: int = 50) -> list:
         """Get raw repository data for a user."""
@@ -80,7 +82,7 @@ class GitHubService:
                 }
                 members.append(member_data)
             
-            return members
+            return sanitize_list(members)
         except Exception as e:
             print(f"Error fetching organization members: {e}")
             return []
@@ -126,7 +128,7 @@ class GitHubService:
                 }
                 contributors.append(contributor_data)
             
-            return contributors
+            return sanitize_list(contributors)
         except Exception as e:
             print(f"Error fetching repository contributors: {e}")
             return []

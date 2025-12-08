@@ -3,6 +3,7 @@
 from typing import Dict, Any, List
 from atlassian import Jira
 from config import Config
+from shared.data_sanitizer import sanitize_developer_profile, sanitize_list
 
 
 class JiraService:
@@ -26,22 +27,24 @@ class JiraService:
         """Get raw user profile data from Jira."""
         try:
             user = self.jira.user(user_email)
-            return {
+            profile = {
                 "email": user_email,
                 "display_name": user.get("displayName"),
                 "account_id": user.get("accountId"),
                 "account_type": user.get("accountType"),
                 "active": user.get("active", True)
             }
+            return sanitize_developer_profile(profile)
         except Exception as e:
             print(f"Error fetching user profile: {e}")
-            return {
+            profile = {
                 "email": user_email,
                 "display_name": "Unknown User",
                 "account_id": None,
                 "account_type": "atlassian",
                 "active": False
             }
+            return sanitize_developer_profile(profile)
     
     def get_user_issues(self, user_email: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Get raw issue data for a user."""
@@ -53,6 +56,10 @@ class JiraService:
             issue_list = []
             
             for issue_data in issues.get("issues", []):
+                # Get assignee and reporter display names instead of emails
+                assignee_info = issue_data.get("fields", {}).get("assignee")
+                reporter_info = issue_data.get("fields", {}).get("reporter")
+                
                 issue = {
                     "key": issue_data.get("key"),
                     "summary": issue_data.get("fields", {}).get("summary"),
@@ -63,12 +70,12 @@ class JiraService:
                     "project_key": issue_data.get("fields", {}).get("project", {}).get("key"),
                     "created": issue_data.get("fields", {}).get("created"),
                     "updated": issue_data.get("fields", {}).get("updated"),
-                    "assignee": issue_data.get("fields", {}).get("assignee", {}).get("emailAddress") if issue_data.get("fields", {}).get("assignee") else None,
-                    "reporter": issue_data.get("fields", {}).get("reporter", {}).get("emailAddress") if issue_data.get("fields", {}).get("reporter") else None
+                    "assignee_name": assignee_info.get("displayName") if assignee_info else None,
+                    "reporter_name": reporter_info.get("displayName") if reporter_info else None
                 }
                 issue_list.append(issue)
             
-            return issue_list
+            return sanitize_list(issue_list)
             
         except Exception as e:
             print(f"Error fetching user issues: {e}")
@@ -91,12 +98,13 @@ class JiraService:
             for project_key in project_keys:
                 try:
                     project = self.jira.project(project_key)
+                    lead_info = project.get("lead")
                     project_data = {
                         "key": project.get("key"),
                         "name": project.get("name"),
                         "description": project.get("description"),
                         "project_type": project.get("projectTypeKey"),
-                        "lead": project.get("lead", {}).get("emailAddress") if project.get("lead") else None
+                        "lead_name": lead_info.get("displayName") if lead_info else None
                     }
                     projects.append(project_data)
                 except Exception:
@@ -106,10 +114,10 @@ class JiraService:
                         "name": project_key,
                         "description": None,
                         "project_type": "unknown",
-                        "lead": None
+                        "lead_name": None
                     })
             
-            return projects
+            return sanitize_list(projects)
             
         except Exception as e:
             print(f"Error fetching user projects: {e}")

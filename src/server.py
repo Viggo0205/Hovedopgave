@@ -186,6 +186,98 @@ async def compare_developers(
         }
 
 
+@mcp.tool()
+async def export_developer_profile(
+    username: str,
+    output_path: Optional[str] = None,
+    format: str = "json"
+) -> Dict[str, Any]:
+    """
+    Export developer competence profile to a file for external analysis.
+    
+    This tool exports sanitized developer data (without sensitive personal information)
+    to a JSON file that can be used for further analysis in external tools.
+    
+    Args:
+        username: GitHub username to export profile for
+        output_path: File path for export (default: ./exports/{username}_profile.json)
+        format: Export format - currently only 'json' is supported
+        
+    Returns:
+        Export status including file path and record count
+    """
+    import json
+    import os
+    from pathlib import Path
+    
+    try:
+        # Analyze the developer first
+        config = Config()
+        github_service = GitHubService()
+        analyzer = GitHubAnalyzer(github_service)
+        
+        logger.info(f"Exporting profile for user: {username}")
+        
+        # Get analysis (already sanitized by services)
+        analysis_result = await analyzer.analyze_developer(username)
+        
+        # Prepare export data with metadata
+        export_data = {
+            "export_metadata": {
+                "username": username,
+                "export_date": datetime.now().isoformat(),
+                "format": format,
+                "data_sanitized": True,
+                "contains_pii": False
+            },
+            "developer_profile": {
+                "username": analysis_result.get("username"),
+                "profile": analysis_result.get("profile", {}),
+                "language_skills": analysis_result.get("language_skills", {}),
+                "expertise_areas": analysis_result.get("expertise_areas", {}),
+                "total_repositories": analysis_result.get("total_repositories", 0),
+                "analysis_date": datetime.now().isoformat()
+            }
+        }
+        
+        # Determine output path
+        if not output_path:
+            exports_dir = Path("./exports")
+            exports_dir.mkdir(exist_ok=True)
+            output_path = str(exports_dir / f"{username}_profile.json")
+        else:
+            # Ensure directory exists
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+        
+        # Write to file
+        with open(output_path, 'w', encoding='utf-8') as f:
+            json.dump(export_data, f, indent=2, ensure_ascii=False)
+        
+        file_size = os.path.getsize(output_path)
+        
+        logger.info(f"Successfully exported profile to: {output_path}")
+        
+        return {
+            "success": True,
+            "file_path": str(Path(output_path).absolute()),
+            "records_exported": 1,
+            "file_size_bytes": file_size,
+            "format": format,
+            "timestamp": datetime.now().isoformat(),
+            "data_sanitized": True
+        }
+        
+    except Exception as e:
+        logger.error(f"Error exporting profile for {username}: {str(e)}")
+        return {
+            "success": False,
+            "file_path": output_path or "N/A",
+            "records_exported": 0,
+            "error_message": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
 @mcp.resource("github://available-languages")
 async def get_available_languages() -> str:
     """List all programming languages we can analyze dynamically from constants."""

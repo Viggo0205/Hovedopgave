@@ -1,10 +1,10 @@
 {
   "mcpServers": {
-    "Hovedopgave": {
-      "command": "uv",
+    "developer-skill-analyzer": {
+      "command": "C:\\Users\\victo\\.local\\bin\\uv.exe",
       "args": [
         "--directory",
-        "C:\\Users\\tobia\\OneDrive - Zealand\\datamatiker\\Hovedopgave\\Hovedopgave",
+        "C:\\Users\\victo\\Desktop\\Hovedopgave",
         "run",
         "src/server.py"
       ]

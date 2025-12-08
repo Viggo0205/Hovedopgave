@@ -1,6 +1,51 @@
 # Claude Desktop MCP Setup Guide
 This guide will help you set up the Developer Skill Analyzer MCP server with Claude Desktop from scratch.
 
+## 🚀 Quick Automated Setup (Recommended)
+
+If you already have the project and just want to configure Claude Desktop, use the automated setup:
+
+### 1. Install uv (if not already installed)
+
+**Windows:**
+```powershell
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+**macOS/Linux:**
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+### 2. Ensure .env is configured
+
+Make sure your `.env` file contains:
+```env
+GITHUB_TOKEN=your_github_token_here
+MOCK_MODE=false
+```
+
+### 3. Run automated setup script
+
+```powershell
+python setup_claude_desktop.py
+```
+
+This will:
+- ✅ Check uv installation
+- ✅ Load environment variables
+- ✅ Backup existing Claude config
+- ✅ Configure MCP server
+- ✅ Save local config copy
+
+### 4. Restart Claude Desktop
+
+Close and reopen Claude Desktop, then verify the connection (🔌 developer-skill-analyzer).
+
+---
+
+## 📖 Manual Setup (If Automated Fails)
+
 ## Prerequisites
 ### 1. Install Claude Desktop
 - Download and install Claude Desktop from: https://claude.ai/download
