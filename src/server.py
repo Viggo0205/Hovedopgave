@@ -511,26 +511,21 @@ async def save_analysis_to_database(
         skill_processor = SkillProcessor(db_repo)
         
         # Create or get user
-        user = db_repo.get_user_by_identifier(github_username, None)
-        if not user:
-            user_id = db_repo.create_user(
-                github_username=github_username,
-                full_name=full_name or github_username
-            )
-        else:
-            user_id = user['id']
+        user_id = db_repo.get_or_create_user(
+            github_username=github_username,
+            full_name=full_name or github_username
+        )
         
         # Save analysis
-        analysis_id = db_repo.save_analysis(
+        analysis_version = db_repo.save_analysis(
             user_id=user_id,
-            analysis_data=analysis_result,
-            source="github"
+            analysis_data=analysis_result
         )
         
         return {
             "status": "success",
             "user_id": user_id,
-            "analysis_id": analysis_id,
+            "analysis_version": analysis_version,
             "github_username": github_username,
             "message": "Analysis saved to database",
             "timestamp": datetime.now().isoformat()
