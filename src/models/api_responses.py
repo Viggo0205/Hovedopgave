@@ -9,7 +9,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field, ConfigDict
 
-from models.skills import SkillLevel, SkillCategory
+from .skills import SkillLevel, SkillCategory
 
 
 class LanguageSkill(BaseModel):
