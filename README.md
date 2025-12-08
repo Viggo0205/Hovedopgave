@@ -1,50 +1,72 @@
 # Developer Skill Analyzer - MCP Server
 
-A Model Context Protocol (MCP) server that analyzes developer skills based on GitHub and Jira data, with multi-AI client support.
+A Model Context Protocol (MCP) server that analyzes developer skills based on GitHub and Jira data, with PostgreSQL database integration for persistent storage and analysis versioning.
 
 ## 🚀 Quick Setup
 
-### 1. Configure Environment
+### 1. Install PostgreSQL
+```powershell
+# Download and install PostgreSQL from:
+# https://www.postgresql.org/download/
+# Default credentials: postgres/postgres, port 5432
+```
+
+### 2. Setup Database
+```powershell
+# Run the automated setup script
+.\setup_database.bat
+
+# Or manually:
+psql -U postgres -c "CREATE DATABASE developer_skills;"
+psql -U postgres -d developer_skills -f src\developer_skill_analyzer\db\schema.sql
+```
+
+### 3. Configure Environment
 ```bash
 # Copy the example environment file
 cp .env.example .env
 
-# Edit .env and add your GitHub Personal Access Token
+# Edit .env and add your credentials:
 # GITHUB_TOKEN=your_actual_github_token_here
 # MOCK_MODE=false
+# DATABASE_URL=postgresql://postgres:postgres@localhost:5432/developer_skills
 ```
 
-### 2. Quick Start
+### 4. Install Dependencies
+```powershell
+pip install psycopg2-binary
+pip install -r requirements.txt  # or pip install -e .
+```
 
-#### Run the MCP Client
+### 5. Test Database Connection
+```powershell
+python test_database.py
+```
+
+### 6. Run the MCP Client
 ```powershell
 python mcp_client.py
-```
-
-### 2. Set AI API Keys (Optional)
-```powershell
-# For Claude AI
-$env:ANTHROPIC_API_KEY='your-claude-key'
-
-# For GPT-4
-$env:OPENAI_API_KEY='your-openai-key'
-```
-
-### 3. Chat Naturally
-```
-🤖 Multi-AI: Who knows Python?
-🤖 Multi-AI: What are Sarah's skills?
-🤖 Multi-AI: compare Who are our best developers?
 ```
 
 ## 🤖 Features
 
 ### MCP Server
-- ✅ FastMCP server with mock data support
-- ✅ GitHub profile analysis simulation
-- ✅ Jira project analysis simulation
+- ✅ FastMCP server with PostgreSQL integration
+- ✅ GitHub profile and repository analysis
+- ✅ Jira project and issue analysis
 - ✅ Skill extraction and proficiency assessment
+- ✅ **Database persistence with version control**
+- ✅ **Dynamic skill catalog management**
+- ✅ **Analysis history tracking (max 2 versions)**
 - ✅ Team expertise mapping
+
+### Database Features
+- ✅ **Persistent storage** of all analyses
+- ✅ **Automatic version management** (keeps 2 versions)
+- ✅ **Dynamic competence catalog** loaded from database
+- ✅ **User competence tracking** with proficiency percentages
+- ✅ **Skill ranking system** (Beginner/Intermediate/Advanced/Expert)
+- ✅ **SQL analytics** for team insights
 
 ### Multi-AI Client
 - ✅ Claude 3.5 Sonnet integration

@@ -52,6 +52,8 @@ from .models.developer import DeveloperProfile, SkillAssessment
 from .analyzers.github_analyzer import GitHubAnalyzer
 from .analyzers.jira_analyzer import JiraAnalyzer
 from .analyzers.skill_processor import SkillProcessor
+from .db.repository import DatabaseRepository
+from .db.connection import DatabaseConnection
 
 # Initialize logging - completely disable logging to prevent any stdout interference
 logging.basicConfig(
@@ -120,6 +122,96 @@ class ServerControlRequest(BaseModel):
     message: Optional[str] = None
 
 
+# ===== INTERNAL HELPER FUNCTIONS (Not MCP tools) =====
+
+async def _analyze_github_developer_internal(
+    username: str,
+    repositories: Optional[List[str]] = None,
+    include_contributions: bool = True,
+    time_range_months: int = 12
+) -> Dict[str, Any]:
+    """Internal helper to analyze GitHub developer without MCP tool wrapper."""
+    config = Config()
+    if not config.github_token:
+        return {
+            "error": "GitHub token not configured",
+            "developer": username,
+            "analysis_type": "github",
+            "data_source": "error"
+        }
+    
+    analyzer = GitHubAnalyzer(config.github_token)
+    logger.info(f"Starting GitHub analysis for user: {username}")
+    
+    # Perform the analysis
+    analysis_result = await analyzer.analyze_developer(
+        username=username,
+        repositories=repositories,
+        include_contributions=include_contributions,
+        time_range_months=time_range_months
+    )
+    
+    # Process skills using the skill processor
+    skill_processor = SkillProcessor()
+    skill_assessment = skill_processor.process_github_data(analysis_result)
+    
+    return {
+        "developer": username,
+        "analysis_type": "github",
+        "data_source": "real_api",
+        "time_range_months": time_range_months,
+        "skill_assessment": skill_assessment,
+        "analysis_date": analysis_result.get("analysis_date"),
+        "summary": skill_assessment.get("summary", {}),
+        "detailed_skills": skill_assessment.get("skills", {}),
+        "recommendations": skill_assessment.get("recommendations", [])
+    }
+
+
+async def _analyze_jira_developer_internal(
+    email: str,
+    projects: Optional[List[str]] = None,
+    include_comments: bool = True,
+    time_range_months: int = 6
+) -> Dict[str, Any]:
+    """Internal helper to analyze Jira developer without MCP tool wrapper."""
+    config = Config()
+    analyzer = JiraAnalyzer(
+        server_url=config.jira_server_url,
+        email=config.jira_email,
+        api_token=config.jira_api_token
+    )
+    
+    logger.info(f"Starting Jira analysis for user: {email}")
+    
+    # Perform the analysis
+    analysis_result = await analyzer.analyze_developer(
+        email=email,
+        projects=projects,
+        include_comments=include_comments,
+        time_range_months=time_range_months
+    )
+    
+    # Process skills using the skill processor
+    skill_processor = SkillProcessor()
+    skill_assessment = skill_processor.process_jira_data(analysis_result)
+    
+    return {
+        "developer": email,
+        "analysis_type": "jira",
+        "time_range_months": time_range_months,
+        "projects_analyzed": projects or analysis_result.get("projects", []),
+        "skill_assessment": skill_assessment,
+        "analysis_date": analysis_result.get("analysis_date"),
+        "summary": skill_assessment.get("summary", {}),
+        "detailed_skills": skill_assessment.get("skills", {}),
+        "collaboration_metrics": skill_assessment.get("collaboration", {}),
+        "recommendations": skill_assessment.get("recommendations", [])
+    }
+
+
+# ===== MCP TOOLS =====
+
 @mcp.tool()
 async def analyze_github_developer(
     username: str,
@@ -148,22 +240,17 @@ async def analyze_github_developer(
         - Learning progression
     """
     try:
-        config = Config()
-        analyzer = GitHubAnalyzer(config.github_token)
-        
-        logger.info(f"Starting GitHub analysis for user: {username}")
-        
-        # Perform the analysis
-        analysis_result = await analyzer.analyze_developer(
-            username=username,
-            repositories=repositories,
-            include_contributions=include_contributions,
-            time_range_months=time_range_months
+        return await _analyze_github_developer_internal(
+            username, repositories, include_contributions, time_range_months
         )
-        
-        # Process skills using the skill processor
-        skill_processor = SkillProcessor()
-        skill_assessment = skill_processor.process_github_data(analysis_result)
+    except Exception as e:
+        logger.error(f"Error analyzing GitHub developer {username}: {str(e)}")
+        return {
+            "error": f"Failed to analyze GitHub developer: {str(e)}",
+            "developer": username,
+            "analysis_type": "github",
+            "data_source": "error"
+        }
         
         return {
             "developer": username,
@@ -185,6 +272,49 @@ async def analyze_github_developer(
             "analysis_type": "github",
             "data_source": "error"
         }
+
+
+# Internal helper function (not an MCP tool)
+async def _analyze_jira_developer_internal(
+    email: str,
+    projects: Optional[List[str]] = None,
+    include_comments: bool = True,
+    time_range_months: int = 6
+) -> Dict[str, Any]:
+    """Internal helper to analyze Jira developer."""
+    config = Config()
+    analyzer = JiraAnalyzer(
+        server_url=config.jira_server_url,
+        email=config.jira_email,
+        api_token=config.jira_api_token
+    )
+    
+    logger.info(f"Starting Jira analysis for user: {email}")
+    
+    # Perform the analysis
+    analysis_result = await analyzer.analyze_developer(
+        email=email,
+        projects=projects,
+        include_comments=include_comments,
+        time_range_months=time_range_months
+    )
+    
+    # Process skills using the skill processor
+    skill_processor = SkillProcessor()
+    skill_assessment = skill_processor.process_jira_data(analysis_result)
+    
+    return {
+        "developer": email,
+        "analysis_type": "jira",
+        "time_range_months": time_range_months,
+        "projects_analyzed": projects or analysis_result.get("projects", []),
+        "skill_assessment": skill_assessment,
+        "analysis_date": analysis_result.get("analysis_date"),
+        "summary": skill_assessment.get("summary", {}),
+        "detailed_skills": skill_assessment.get("skills", {}),
+        "collaboration_metrics": skill_assessment.get("collaboration", {}),
+        "recommendations": skill_assessment.get("recommendations", [])
+    }
 
 
 @mcp.tool()
@@ -215,40 +345,9 @@ async def analyze_jira_developer(
         - Issue resolution patterns
     """
     try:
-        config = Config()
-        analyzer = JiraAnalyzer(
-            server_url=config.jira_server_url,
-            email=config.jira_email,
-            api_token=config.jira_api_token
+        return await _analyze_jira_developer_internal(
+            email, projects, include_comments, time_range_months
         )
-        
-        logger.info(f"Starting Jira analysis for user: {email}")
-        
-        # Perform the analysis
-        analysis_result = await analyzer.analyze_developer(
-            email=email,
-            projects=projects,
-            include_comments=include_comments,
-            time_range_months=time_range_months
-        )
-        
-        # Process skills using the skill processor
-        skill_processor = SkillProcessor()
-        skill_assessment = skill_processor.process_jira_data(analysis_result)
-        
-        return {
-            "developer": email,
-            "analysis_type": "jira",
-            "time_range_months": time_range_months,
-            "projects_analyzed": projects or analysis_result.get("projects", []),
-            "skill_assessment": skill_assessment,
-            "analysis_date": analysis_result.get("analysis_date"),
-            "summary": skill_assessment.get("summary", {}),
-            "detailed_skills": skill_assessment.get("skills", {}),
-            "collaboration_metrics": skill_assessment.get("collaboration", {}),
-            "recommendations": skill_assessment.get("recommendations", [])
-        }
-        
     except Exception as e:
         logger.error(f"Error analyzing Jira developer {email}: {str(e)}")
         return {
@@ -386,14 +485,16 @@ async def get_skill_summary(
         results = {}
         
         if github_username:
-            github_result = await analyze_github_developer(
+            # Call internal helper instead of decorated function
+            github_result = await _analyze_github_developer_internal(
                 username=github_username,
                 time_range_months=time_range_months
             )
             results["github"] = github_result
             
         if jira_email:
-            jira_result = await analyze_jira_developer(
+            # Call internal helper instead of decorated function
+            jira_result = await _analyze_jira_developer_internal(
                 email=jira_email,
                 time_range_months=time_range_months
             )
@@ -446,9 +547,9 @@ async def compare_developers(
         Detailed comparison analysis
     """
     try:
-        # Analyze both developers
-        dev1_analysis = await analyze_github_developer(developer1_github)
-        dev2_analysis = await analyze_github_developer(developer2_github)
+        # Analyze both developers - call internal helpers
+        dev1_analysis = await _analyze_github_developer_internal(developer1_github)
+        dev2_analysis = await _analyze_github_developer_internal(developer2_github)
         
         # Process comparison
         skill_processor = SkillProcessor()
@@ -736,6 +837,330 @@ async def stop_server(confirmation: bool = False) -> Dict[str, Any]:
         "timestamp": datetime.now().isoformat(),
         "final_message": "Goodbye! Restart the server to reconnect."
     }
+
+
+# ===== DATABASE TOOLS =====
+
+@mcp.tool()
+async def add_competence_to_database(
+    name: str,
+    category: str,
+    description: str = ""
+) -> Dict[str, Any]:
+    """
+    Add a new competence/skill to the database.
+    
+    This allows dynamic expansion of the skill taxonomy used for analysis.
+    
+    Args:
+        name: Name of the competence (e.g., "React", "Python", "Leadership")
+        category: Category (programming_languages, frameworks_tools, databases, soft_skills, domain_knowledge)
+        description: Optional description of the competence
+        
+    Returns:
+        Confirmation with competence ID
+    """
+    try:
+        db_repo = DatabaseRepository()
+        competence_id = db_repo.add_competence(name, category, description)
+        
+        return {
+            "status": "success",
+            "competence_id": competence_id,
+            "name": name,
+            "category": category,
+            "message": f"Successfully added competence '{name}' to category '{category}'",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error adding competence: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "name": name,
+            "category": category,
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def get_all_competences() -> Dict[str, Any]:
+    """
+    Retrieve all competences from the database.
+    
+    Returns the complete list of skills/competences that can be tracked,
+    organized by category.
+    
+    Returns:
+        All competences with their categories and descriptions
+    """
+    try:
+        db_repo = DatabaseRepository()
+        competences = db_repo.get_all_competences()
+        
+        # Organize by category
+        by_category = {}
+        for comp in competences:
+            category = comp['category']
+            if category not in by_category:
+                by_category[category] = []
+            by_category[category].append({
+                'id': comp['id'],
+                'name': comp['name'],
+                'description': comp['description']
+            })
+        
+        return {
+            "status": "success",
+            "total_competences": len(competences),
+            "categories": len(by_category),
+            "competences_by_category": by_category,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting competences: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def get_user_competence_overview(
+    github_username: Optional[str] = None,
+    jira_email: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Get a user's competence overview from the database.
+    
+    Retrieves stored competence levels and ranks for a specific user.
+    
+    Args:
+        github_username: GitHub username to lookup
+        jira_email: Jira email to lookup
+        
+    Returns:
+        User's competence overview with ranks and percentages
+    """
+    try:
+        db_repo = DatabaseRepository()
+        
+        # Get user ID
+        user = db_repo.get_user_by_identifier(github_username, jira_email)
+        if not user:
+            return {
+                "status": "not_found",
+                "message": "User not found in database",
+                "github_username": github_username,
+                "jira_email": jira_email,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        user_id = user['id']
+        overview = db_repo.get_user_competence_overview(user_id)
+        
+        return {
+            "status": "success",
+            "user_info": {
+                "id": user['id'],
+                "github_username": user['github_username'],
+                "jira_email": user['jira_email'],
+                "full_name": user['full_name'],
+                "display_name": user['display_name']
+            },
+            "total_competences": len(overview),
+            "competences": overview,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting user competence overview: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def save_analysis_to_database(
+    github_username: Optional[str] = None,
+    jira_email: Optional[str] = None,
+    full_name: Optional[str] = None,
+    save_to_db: bool = True
+) -> Dict[str, Any]:
+    """
+    Analyze a developer and save results to the database.
+    
+    This performs a full analysis and stores both the detailed results
+    and extracted competence levels. Maintains version history (max 2 versions).
+    
+    Args:
+        github_username: GitHub username for analysis
+        jira_email: Jira email for analysis
+        full_name: Developer's full name (optional)
+        save_to_db: Whether to save results to database (default: True)
+        
+    Returns:
+        Analysis results and database save confirmation
+    """
+    try:
+        db_repo = DatabaseRepository()
+        
+        # Perform analysis - call internal helpers
+        analysis_results = {}
+        
+        if github_username:
+            github_result = await _analyze_github_developer_internal(
+                username=github_username,
+                time_range_months=12
+            )
+            # Extract skill_assessment for combine_assessments
+            analysis_results['github'] = github_result.get('skill_assessment', {})
+            
+        if jira_email:
+            jira_result = await _analyze_jira_developer_internal(
+                email=jira_email,
+                time_range_months=6
+            )
+            # Extract skill_assessment for combine_assessments
+            analysis_results['jira'] = jira_result.get('skill_assessment', {})
+        
+        if not analysis_results:
+            return {
+                "status": "error",
+                "error": "No analysis performed - provide github_username or jira_email",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Combine assessments
+        skill_processor = SkillProcessor(db_repo)
+        combined = skill_processor.combine_assessments(analysis_results)
+        
+        if not save_to_db:
+            return {
+                "status": "analysis_only",
+                "analysis": combined,
+                "message": "Analysis performed but not saved to database",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Get or create user
+        user_id = db_repo.get_or_create_user(
+            github_username=github_username,
+            jira_email=jira_email,
+            full_name=full_name
+        )
+        
+        # Save full analysis with version management
+        version = db_repo.save_analysis(user_id, combined)
+        
+        # Extract and save competences
+        all_skills = (
+            combined.get('technical_skills', []) +
+            combined.get('soft_skills', []) +
+            combined.get('domain_skills', [])
+        )
+        
+        competences_saved = 0
+        for skill in all_skills:
+            try:
+                skill_name = skill.get('name')
+                confidence = skill.get('confidence_score', 0.0)
+                frequency = skill.get('usage_frequency', 0)
+                
+                # Convert confidence to percentage (0-100)
+                percentage = min(confidence * 100, 100)
+                
+                db_repo.update_user_competence(
+                    user_id=user_id,
+                    competence_name=skill_name,
+                    procent=percentage,
+                    usage_frequency=frequency
+                )
+                competences_saved += 1
+                
+            except Exception as e:
+                logger.warning(f"Could not save competence {skill.get('name')}: {e}")
+                continue
+        
+        return {
+            "status": "success",
+            "user_id": user_id,
+            "github_username": github_username,
+            "jira_email": jira_email,
+            "analysis_version": version,
+            "competences_saved": competences_saved,
+            "total_skills_analyzed": len(all_skills),
+            "analysis_summary": combined.get('summary', {}),
+            "message": f"Analysis saved as version {version}. Previous version archived.",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error saving analysis to database: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def get_previous_analysis(
+    github_username: Optional[str] = None,
+    jira_email: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Retrieve previous analysis versions from the database.
+    
+    Gets both current and previous analysis (max 2 versions stored).
+    
+    Args:
+        github_username: GitHub username
+        jira_email: Jira email
+        
+    Returns:
+        All stored analysis versions for the user
+    """
+    try:
+        db_repo = DatabaseRepository()
+        
+        # Get user
+        user = db_repo.get_user_by_identifier(github_username, jira_email)
+        if not user:
+            return {
+                "status": "not_found",
+                "message": "No previous analyses found for this user",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Get all analyses
+        analyses = db_repo.get_all_analyses(user['id'])
+        
+        return {
+            "status": "success",
+            "user_info": {
+                "id": user['id'],
+                "github_username": user['github_username'],
+                "jira_email": user['jira_email']
+            },
+            "total_versions": len(analyses),
+            "analyses": analyses,
+            "message": f"Found {len(analyses)} analysis version(s)",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error retrieving previous analysis: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 
 async def test_tools_directly():
