@@ -1,7 +1,21 @@
 # Developer Skill Analyzer - MCP Server
-A Model Context Protocol (MCP) server that analyzes developer skills based on GitHub and Jira data, with multi-AI client support.
+A Model Context Protocol (MCP) server that analyzes developer skills based on GitHub and Jira data, with PostgreSQL database integration, GDPR-compliant data export, and multi-AI client support.
 ## 🚀 Quick Setup
-### 1. Configure Environment
+
+### 1. Setup Database (Optional)
+```powershell
+# Install PostgreSQL (download from postgresql.org)
+# Run automated setup:
+.\setup_database.bat
+
+# Or use Python script:
+python setup_database_python.py
+
+# Test connection:
+python test_database.py
+```
+
+### 2. Configure Environment
 ```bash
 # Copy the example environment file
 cp .env.example .env
@@ -13,12 +27,32 @@ cp .env.example .env
 #### Run the MCP Client
 ```powershell
 python mcp_client.py
-```
-### 2. Set AI API Keys (Optional)
-```powershell
-# For Claude AI
-$env:ANTHROPIC_API_KEY='your-claude-key'
-# For GPT-4
+## 🤖 Features
+### MCP Server
+- ✅ GitHub profile and repository analysis
+- ✅ Jira project and issue analysis
+- ✅ Skill extraction and proficiency assessment
+- ✅ **PostgreSQL database persistence** (optional)
+- ✅ **GDPR-compliant data sanitization** (no PII export)
+- ✅ **JSON export with schema validation**
+- ✅ **Automated Claude Desktop setup**
+- ✅ Analysis history tracking with versioning
+- ✅ Dynamic skill catalog management
+- ✅ Team expertise mapping
+
+### Database Features (Optional)
+- ✅ **Persistent storage** of all analyses
+- ✅ **Automatic version management** (keeps 2 versions)
+- ✅ **Dynamic competence catalog** loaded from database
+- ✅ **User competence tracking** with proficiency percentages
+- ✅ **Skill ranking system** (Beginner/Intermediate/Advanced/Expert)
+- ✅ **SQL analytics** for team insights
+
+### Data Privacy
+- ✅ **No email addresses** in exported data
+- ✅ **Automatic PII removal** from all API responses
+- ✅ **JSON Schema documentation** for external tools
+- ✅ **GDPR compliant** data handling
 $env:OPENAI_API_KEY='your-openai-key'
 ```
 ### 3. Chat Naturally
