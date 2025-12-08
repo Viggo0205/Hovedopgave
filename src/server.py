@@ -359,7 +359,7 @@ async def add_competence_to_database(
         Confirmation with competence ID
     """
     try:
-        from developer_skill_analyzer.db.repository import DatabaseRepository
+        from db.repository import DatabaseRepository
         
         db_repo = DatabaseRepository()
         competence_id = db_repo.add_competence(name, category, description)
@@ -395,7 +395,7 @@ async def get_all_competences() -> Dict[str, Any]:
         All competences with their categories and descriptions
     """
     try:
-        from developer_skill_analyzer.db.repository import DatabaseRepository
+        from db.repository import DatabaseRepository
         
         db_repo = DatabaseRepository()
         competences = db_repo.get_all_competences()
@@ -443,7 +443,7 @@ async def get_user_competence_overview(
         User's competence overview with ranks and percentages
     """
     try:
-        from developer_skill_analyzer.db.repository import DatabaseRepository
+        from db.repository import DatabaseRepository
         
         db_repo = DatabaseRepository()
         
@@ -498,8 +498,8 @@ async def save_analysis_to_database(
         Analysis results and database save confirmation
     """
     try:
-        from developer_skill_analyzer.db.repository import DatabaseRepository
-        from developer_skill_analyzer.analyzers.skill_processor import SkillProcessor
+        from db.repository import DatabaseRepository
+        from analyzers.skill_processor import SkillProcessor
         
         # Perform GitHub analysis
         github_service = GitHubService()
@@ -560,7 +560,7 @@ async def get_previous_analysis(
         All stored analysis versions for the user
     """
     try:
-        from developer_skill_analyzer.db.repository import DatabaseRepository
+        from db.repository import DatabaseRepository
         
         db_repo = DatabaseRepository()
         

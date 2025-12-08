@@ -7,10 +7,11 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from collections import defaultdict, Counter
 
-from models.skills import (
+from ..models.skills import (
     Skill, SkillLevel, SkillCategory, SkillEvidence, SkillAssessment, SkillGap
 )
-from models.analysis import GitHubAnalysisResult, JiraAnalysisResult
+from ..models.analysis import GitHubAnalysisResult, JiraAnalysisResult
+from ..db.repository import DatabaseRepository
 
 logger = logging.getLogger(__name__)
 
@@ -18,13 +19,36 @@ logger = logging.getLogger(__name__)
 class SkillProcessor:
     """Processes and combines skill data from multiple sources."""
     
-    def __init__(self):
-        """Initialize the skill processor."""
+    def __init__(self, db_repository: Optional[DatabaseRepository] = None):
+        """
+        Initialize the skill processor.
+        
+        Args:
+            db_repository: Database repository instance (optional)
+        """
+        self.db_repo = db_repository or DatabaseRepository()
         self.skill_categories = self._initialize_skill_categories()
         self.technology_mappings = self._initialize_technology_mappings()
     
     def _initialize_skill_categories(self) -> Dict[str, List[str]]:
-        """Initialize skill category mappings."""
+        """Initialize skill category mappings from database."""
+        try:
+            # Try to load from database first
+            categories = self.db_repo.get_competence_categories()
+            
+            if categories:
+                logger.info(f"Loaded skill categories from database: {len(categories)} categories")
+                return categories
+            else:
+                logger.warning("No categories found in database, using fallback defaults")
+                return self._get_fallback_categories()
+                
+        except Exception as e:
+            logger.warning(f"Could not load categories from database: {e}. Using fallback defaults.")
+            return self._get_fallback_categories()
+    
+    def _get_fallback_categories(self) -> Dict[str, List[str]]:
+        """Fallback categories if database is not available."""
         return {
             "programming_languages": [
                 "Python", "JavaScript", "Java", "TypeScript", "C#", "C++", "Go",
