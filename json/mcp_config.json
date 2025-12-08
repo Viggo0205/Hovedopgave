@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "developer-skill-analyzer": {
+      "command": "python",
+      "args": [
+        "-m",
+        "developer_skill_analyzer.server"
+      ],
+      "cwd": "c:\\Users\\victo\\Desktop\\Hovedopgave\\src",
+      "env": {
+        "PYTHONPATH": "c:\\Users\\victo\\Desktop\\Hovedopgave\\src"
+      }
+    }
+  }
+}

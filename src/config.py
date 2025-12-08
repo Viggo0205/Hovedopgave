@@ -1,23 +1,23 @@
-"""
-Configuration management for the Developer Skill Analyzer.
-"""
-
 import os
 from typing import Optional
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
+# This allows configuration through environment variables or .env file
 load_dotenv()
 
-
 class Config:
-    """Configuration class for the application."""
-    
+
     def __init__(self):
-        """Initialize configuration from environment variables."""
-        # GitHub API Configuration
-        self.github_token: Optional[str] = os.getenv("GITHUB_ACCESS_TOKEN")
         
+        # GitHub API Configuration
+        self.github_token: Optional[str] = (
+            os.getenv("GITHUB_TOKEN") or 
+            os.getenv("GITHUB_ACCESS_TOKEN")
+        )
+        self.github_username: Optional[str] = os.getenv("GITHUB_USERNAME")
+
+        # der er intet der bliver brugt her
         # Jira API Configuration
         self.jira_server_url: Optional[str] = os.getenv("JIRA_SERVER_URL")
         self.jira_email: Optional[str] = os.getenv("JIRA_EMAIL")
@@ -41,6 +41,8 @@ class Config:
         self.max_repositories_analyzed: int = int(os.getenv("MAX_REPOSITORIES_ANALYZED", "50"))
         self.max_issues_analyzed: int = int(os.getenv("MAX_ISSUES_ANALYZED", "200"))
     
+   
+   # bliver ikke kaldt nogen steder lige nu
     def validate(self) -> bool:
         """
         Validate the configuration.
@@ -51,21 +53,24 @@ class Config:
         issues = []
         
         if not self.github_token:
-            issues.append("GITHUB_ACCESS_TOKEN is required for GitHub analysis")
+            issues.append("GITHUB_ACCESS_TOKEN is missing or GITHUB_TOKEN is required for GitHub analysis")
         
         if not self.jira_server_url:
-            issues.append("JIRA_SERVER_URL is required for Jira analysis")
+            issues.append("JIRA_SERVER_URL is missing or required for Jira analysis")
         
         if not self.jira_email:
-            issues.append("JIRA_EMAIL is required for Jira analysis")
+            issues.append("JIRA_EMAIL is missing or required for Jira analysis")
         
         if not self.jira_api_token:
-            issues.append("JIRA_API_TOKEN is required for Jira analysis")
+            issues.append("JIRA_API_TOKEN is missing or required for Jira analysis")
         
         if issues:
-            print("Configuration issues found:")
+            # Use logging instead of print to avoid interfering with MCP JSON output
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning("Configuration issues found:")
             for issue in issues:
-                print(f"  - {issue}")
+                logger.warning(f"  - {issue}")
             return False
         
         return True

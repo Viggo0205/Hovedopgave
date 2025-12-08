@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Dict, List, Optional, Any
 from pydantic import BaseModel, Field
 
-from .skills import SkillAssessment
+from models.skills import SkillAssessment
 
 
 class RepositoryAnalysis(BaseModel):
@@ -40,19 +40,6 @@ class RepositoryAnalysis(BaseModel):
     complexity_score: float = 0.0  # Based on code patterns, architecture
     collaboration_level: str = "low"  # "low", "medium", "high"
     role_in_project: str = "contributor"  # "owner", "maintainer", "contributor", "occasional"
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "name": "awesome-project",
-                "url": "https://github.com/user/awesome-project",
-                "primary_language": "Python",
-                "languages": {"Python": 12500, "JavaScript": 3200, "CSS": 800},
-                "commits_count": 87,
-                "complexity_score": 0.75,
-                "role_in_project": "maintainer"
-            }
-        }
 
 
 class GitHubAnalysisResult(BaseModel):
@@ -102,18 +89,6 @@ class GitHubAnalysisResult(BaseModel):
     time_range_analyzed: int = 12  # months
     data_completeness: float = 1.0
     rate_limit_encountered: bool = False
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "username": "johndoe",
-                "total_repositories": 25,
-                "total_commits": 1456,
-                "primary_languages": ["Python", "JavaScript", "Go"],
-                "consistency_score": 0.82,
-                "time_range_analyzed": 12
-            }
-        }
     
     def get_activity_summary(self) -> Dict[str, Any]:
         """Get a summary of GitHub activity."""
@@ -173,19 +148,6 @@ class IssueAnalysis(BaseModel):
     
     # Role indicators
     role_in_issue: str = "assignee"  # "creator", "assignee", "reviewer", "collaborator"
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "key": "PROJ-123",
-                "issue_type": "Story",
-                "status": "Done",
-                "priority": "High",
-                "summary": "Implement user authentication API",
-                "complexity_score": 0.8,
-                "time_to_resolution_hours": 24.5
-            }
-        }
 
 
 class JiraProjectAnalysis(BaseModel):
@@ -209,17 +171,6 @@ class JiraProjectAnalysis(BaseModel):
     primary_role: str = "developer"  # "developer", "tester", "analyst", "lead"
     specialization_areas: List[str] = Field(default_factory=list)
     collaboration_score: float = 0.0
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "project_key": "ECOM",
-                "project_name": "E-commerce Platform",
-                "total_issues_involved": 45,
-                "primary_role": "developer",
-                "specialization_areas": ["backend", "api-development"]
-            }
-        }
 
 
 class JiraAnalysisResult(BaseModel):
@@ -262,17 +213,6 @@ class JiraAnalysisResult(BaseModel):
     time_range_analyzed: int = 6  # months
     data_completeness: float = 1.0
     
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "email": "john.doe@company.com",
-                "total_projects": 3,
-                "total_issues_resolved": 89,
-                "resolution_rate": 0.94,
-                "time_range_analyzed": 6
-            }
-        }
-    
     def get_activity_summary(self) -> Dict[str, Any]:
         """Get a summary of Jira activity."""
         return {
@@ -308,17 +248,6 @@ class AnalysisResult(BaseModel):
     key_strengths: List[str] = Field(default_factory=list)
     improvement_areas: List[str] = Field(default_factory=list)
     career_recommendations: List[str] = Field(default_factory=list)
-    
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "developer_id": "john.doe",
-                "sources_analyzed": ["github", "jira"],
-                "confidence_score": 0.87,
-                "key_strengths": ["Python expertise", "Strong collaboration", "Problem solving"],
-                "improvement_areas": ["DevOps skills", "Frontend frameworks"]
-            }
-        }
     
     def has_github_data(self) -> bool:
         """Check if GitHub analysis data is available."""

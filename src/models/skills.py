@@ -5,7 +5,7 @@ Skill-related models and data structures.
 from datetime import datetime
 from enum import Enum
 from typing import Dict, List, Optional, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class SkillLevel(str, Enum):
@@ -37,12 +37,18 @@ class SkillLevel(str, Enum):
             return cls.INTERMEDIATE
         else:
             return cls.BEGINNER
+    
+    @classmethod
+    def from_confidence(cls, confidence: float) -> "SkillLevel":
+        """Convert a confidence score (0-1) to skill level."""
+        return cls.from_score(confidence)
 
 
 class SkillCategory(str, Enum):
     """Categories of skills that can be analyzed."""
     
     # Technical Skills
+    TECHNICAL = "technical"
     PROGRAMMING_LANGUAGE = "programming_language"
     FRAMEWORK = "framework"
     TOOL = "tool"
@@ -52,6 +58,7 @@ class SkillCategory(str, Enum):
     ARCHITECTURE = "architecture"
     
     # Soft Skills
+    SOFT_SKILL = "soft_skill"
     COMMUNICATION = "communication"
     LEADERSHIP = "leadership"
     PROBLEM_SOLVING = "problem_solving"
@@ -79,8 +86,8 @@ class SkillEvidence(BaseModel):
     frequency: int = 0  # How often this evidence appears
     recency: datetime  # When this evidence was last observed
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "source": "github_commits",
                 "description": "Used Python in 45 commits across 8 repositories",
@@ -89,6 +96,7 @@ class SkillEvidence(BaseModel):
                 "recency": "2024-11-13T10:30:00Z"
             }
         }
+    )
 
 
 class Skill(BaseModel):
@@ -113,8 +121,8 @@ class Skill(BaseModel):
     projects_used_in: List[str] = Field(default_factory=list)
     complexity_level: str = "medium"  # "low", "medium", "high"
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "name": "Python",
                 "category": "programming_language",
@@ -126,6 +134,7 @@ class Skill(BaseModel):
                 "projects_used_in": ["api-service", "data-pipeline", "ml-model"]
             }
         }
+    )
     
     def add_evidence(self, evidence: SkillEvidence) -> None:
         """Add evidence supporting this skill."""
@@ -196,8 +205,8 @@ class SkillGap(BaseModel):
     estimated_learning_time_weeks: Optional[int] = None
     prerequisites: List[str] = Field(default_factory=list)
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "skill_name": "Kubernetes",
                 "category": "tool",
@@ -208,6 +217,7 @@ class SkillGap(BaseModel):
                 "prerequisites": ["Docker", "Container orchestration basics"]
             }
         }
+    )
 
 
 class SkillAssessment(BaseModel):
@@ -237,8 +247,8 @@ class SkillAssessment(BaseModel):
     experience_breadth_score: float = 0.0
     experience_depth_score: float = 0.0
     
-    class Config:
-        json_schema_extra = {
+    model_config = ConfigDict(
+        json_schema_extra={
             "example": {
                 "total_skills_identified": 23,
                 "primary_specialization": "Backend Development",
@@ -248,6 +258,7 @@ class SkillAssessment(BaseModel):
                 "data_quality_score": 0.88
             }
         }
+    )
     
     def add_skill(self, skill: Skill) -> None:
         """Add a skill to the appropriate category."""

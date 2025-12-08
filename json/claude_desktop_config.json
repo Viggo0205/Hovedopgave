@@ -1,0 +1,13 @@
+{
+  "mcpServers": {
+    "developer-skill-analyzer": {
+      "command": "C:\\Users\\victo\\.local\\bin\\uv.exe",
+      "args": [
+        "--directory",
+        "C:\\Users\\victo\\Desktop\\Hovedopgave",
+        "run",
+        "src/server.py"
+      ]
+    }
+  }
+}

@@ -11,7 +11,7 @@ authors = [
 ]
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "mcp>=1.0.0",
     "fastmcp>=0.1.0",
@@ -37,7 +37,10 @@ dev = [
 ]
 
 [project.scripts]
-dev-skill-analyzer = "developer_skill_analyzer.server:main"
+dev-skill-analyzer = "mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
 
 [tool.black]
 line-length = 88
