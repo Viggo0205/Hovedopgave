@@ -592,6 +592,166 @@ async def get_previous_analysis(
         }
 
 
+@mcp.tool()
+async def remove_developer(
+    github_username: Optional[str] = None,
+    jira_email: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Remove (deactivate) a developer who no longer works at the company.
+    This is a soft delete - the user's data is retained but they won't appear in searches.
+    
+    Args:
+        github_username: GitHub username of the developer to remove
+        jira_email: Jira email of the developer to remove
+        
+    Returns:
+        Confirmation of removal with developer details
+    """
+    try:
+        from db.repository import DatabaseRepository
+        
+        if not github_username and not jira_email:
+            return {
+                "status": "error",
+                "error": "Either github_username or jira_email must be provided",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        db_repo = DatabaseRepository()
+        
+        # Check if user exists and is active
+        user = db_repo.get_user_by_identifier(github_username, jira_email, include_inactive=False)
+        if not user:
+            return {
+                "status": "not_found",
+                "message": "No active developer found with the provided identifier",
+                "github_username": github_username,
+                "jira_email": jira_email,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Deactivate the user
+        success = db_repo.deactivate_user(github_username, jira_email)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": f"Developer '{user['github_username'] or user['jira_email']}' has been removed",
+                "developer": {
+                    "github_username": user.get('github_username'),
+                    "full_name": user.get('full_name'),
+                    "display_name": user.get('display_name')
+                },
+                "note": "This is a soft delete. Data is retained and user can be reactivated if needed.",
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "status": "error",
+                "error": "Failed to deactivate user",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+    except Exception as e:
+        logger.error(f"Error removing developer: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def reactivate_developer(
+    github_username: Optional[str] = None,
+    jira_email: Optional[str] = None
+) -> Dict[str, Any]:
+    """
+    Reactivate a previously removed developer.
+    
+    Args:
+        github_username: GitHub username of the developer to reactivate
+        jira_email: Jira email of the developer to reactivate
+        
+    Returns:
+        Confirmation of reactivation
+    """
+    try:
+        from db.repository import DatabaseRepository
+        
+        if not github_username and not jira_email:
+            return {
+                "status": "error",
+                "error": "Either github_username or jira_email must be provided",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        db_repo = DatabaseRepository()
+        success = db_repo.reactivate_user(github_username, jira_email)
+        
+        if success:
+            return {
+                "status": "success",
+                "message": f"Developer has been reactivated",
+                "github_username": github_username,
+                "jira_email": jira_email,
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "status": "not_found",
+                "message": "No inactive developer found with the provided identifier",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+    except Exception as e:
+        logger.error(f"Error reactivating developer: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def list_removed_developers() -> Dict[str, Any]:
+    """
+    List all developers who have been removed (deactivated).
+    
+    Returns:
+        List of inactive developers with their details and deactivation dates
+    """
+    try:
+        from db.repository import DatabaseRepository
+        
+        db_repo = DatabaseRepository()
+        inactive_users = db_repo.get_inactive_users()
+        
+        return {
+            "status": "success",
+            "total_removed": len(inactive_users),
+            "developers": [{
+                "github_username": user.get('github_username'),
+                "jira_email": user.get('jira_email'),
+                "full_name": user.get('full_name'),
+                "display_name": user.get('display_name'),
+                "company": user.get('company'),
+                "deactivated_at": user.get('deactivated_at').isoformat() if user.get('deactivated_at') else None,
+                "created_at": user.get('created_at').isoformat() if user.get('created_at') else None
+            } for user in inactive_users],
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error listing removed developers: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
 @mcp.resource("github://available-languages")
 async def get_available_languages() -> str:
     """List all programming languages we can analyze dynamically from constants."""

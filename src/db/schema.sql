@@ -25,6 +25,8 @@ CREATE TABLE users (
     company VARCHAR(50),
     location VARCHAR(50),
     role_id INT,
+    is_active BOOLEAN DEFAULT TRUE,
+    deactivated_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_role FOREIGN KEY (role_id) REFERENCES role(id) ON DELETE SET NULL
@@ -33,6 +35,7 @@ CREATE TABLE users (
 -- Index for faster lookups
 CREATE INDEX idx_users_github ON users(github_username);
 CREATE INDEX idx_users_jira ON users(jira_email);
+CREATE INDEX idx_users_active ON users(is_active);
 
 
 -- COMPETENCE

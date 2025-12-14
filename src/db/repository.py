@@ -301,7 +301,8 @@ class DatabaseRepository:
     def get_user_by_identifier(
         self,
         github_username: Optional[str] = None,
-        jira_email: Optional[str] = None
+        jira_email: Optional[str] = None,
+        include_inactive: bool = False
     ) -> Optional[Dict[str, Any]]:
         """
         Get user by GitHub username or Jira email.
@@ -309,6 +310,7 @@ class DatabaseRepository:
         Args:
             github_username: GitHub username
             jira_email: Jira email
+            include_inactive: If True, include deactivated users in search
             
         Returns:
             User data or None if not found
@@ -317,6 +319,7 @@ class DatabaseRepository:
             # Build query dynamically based on what's provided
             conditions = []
             params = []
+            
             
             if github_username is not None:
                 conditions.append("github_username = %s")
@@ -329,7 +332,11 @@ class DatabaseRepository:
             if not conditions:
                 return None
             
-            query = f"SELECT * FROM users WHERE {' OR '.join(conditions)} LIMIT 1"
+            # Add active filter unless explicitly including inactive users
+            if not include_inactive:
+                conditions.append("is_active = TRUE")
+            
+            query = f"SELECT * FROM users WHERE {' AND '.join(conditions)} LIMIT 1"
             results = self.db.execute_query(query, tuple(params))
             
             if results:
@@ -339,3 +346,139 @@ class DatabaseRepository:
         except Exception as e:
             logger.error(f"Error getting user by identifier: {e}")
             return None
+    
+    def deactivate_user(
+        self,
+        github_username: Optional[str] = None,
+        jira_email: Optional[str] = None
+    ) -> bool:
+        """
+        Deactivate a user (soft delete).
+        
+        Args:
+            github_username: GitHub username
+            jira_email: Jira email address
+            
+        Returns:
+            True if user was deactivated, False otherwise
+        """
+        try:
+            conditions = []
+            params = []
+            
+            if github_username is not None:
+                conditions.append("github_username = %s")
+                params.append(github_username)
+            
+            if jira_email is not None:
+                conditions.append("jira_email = %s")
+                params.append(jira_email)
+            
+            if not conditions:
+                return False
+            
+            query = f"""
+                UPDATE users 
+                SET is_active = FALSE, 
+                    deactivated_at = CURRENT_TIMESTAMP,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE {' OR '.join(conditions)}
+                AND is_active = TRUE
+                RETURNING id, github_username, full_name
+            """
+            results = self.db.execute_query(query, tuple(params))
+            
+            if results:
+                user = results[0]
+                logger.info(f"Deactivated user: {user['github_username']} (ID: {user['id']})")
+                return True
+            
+            logger.warning(f"No active user found to deactivate with given identifiers")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error deactivating user: {e}")
+            raise
+    
+    def reactivate_user(
+        self,
+        github_username: Optional[str] = None,
+        jira_email: Optional[str] = None
+    ) -> bool:
+        """
+        Reactivate a previously deactivated user.
+        
+        Args:
+            github_username: GitHub username
+            jira_email: Jira email address
+            
+        Returns:
+            True if user was reactivated, False otherwise
+        """
+        try:
+            conditions = []
+            params = []
+            
+            if github_username is not None:
+                conditions.append("github_username = %s")
+                params.append(github_username)
+            
+            if jira_email is not None:
+                conditions.append("jira_email = %s")
+                params.append(jira_email)
+            
+            if not conditions:
+                return False
+            
+            query = f"""
+                UPDATE users 
+                SET is_active = TRUE, 
+                    deactivated_at = NULL,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE {' OR '.join(conditions)}
+                AND is_active = FALSE
+                RETURNING id, github_username, full_name
+            """
+            results = self.db.execute_query(query, tuple(params))
+            
+            if results:
+                user = results[0]
+                logger.info(f"Reactivated user: {user['github_username']} (ID: {user['id']})")
+                return True
+            
+            logger.warning(f"No inactive user found to reactivate with given identifiers")
+            return False
+            
+        except Exception as e:
+            logger.error(f"Error reactivating user: {e}")
+            raise
+    
+    def get_inactive_users(self) -> List[Dict[str, Any]]:
+        """
+        Get all inactive (deactivated) users.
+        
+        Returns:
+            List of inactive users with their details
+        """
+        try:
+            query = """
+                SELECT 
+                    id,
+                    github_username,
+                    jira_email,
+                    full_name,
+                    display_name,
+                    company,
+                    deactivated_at,
+                    created_at
+                FROM users
+                WHERE is_active = FALSE
+                ORDER BY deactivated_at DESC
+            """
+            results = self.db.execute_query(query)
+            return [dict(row) for row in results]
+            
+        except Exception as e:
+            logger.error(f"Error getting inactive users: {e}")
+            raise
+
