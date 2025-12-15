@@ -501,13 +501,25 @@ async def save_analysis_to_database(
         from db.repository import DatabaseRepository
         from analyzers.skill_processor import SkillProcessor
         
+        db_repo = DatabaseRepository()
+        
+        # Check if user exists and is active
+        existing_user = db_repo.get_user_by_identifier(github_username, None, include_inactive=True)
+        if existing_user and not existing_user.get('is_active', True):
+            return {
+                "status": "error",
+                "error": f"Developer '{github_username}' is deactivated and cannot be analyzed",
+                "message": "Use reactivate_developer tool first if you want to analyze this developer",
+                "github_username": github_username,
+                "timestamp": datetime.now().isoformat()
+            }
+        
         # Perform GitHub analysis
         github_service = GitHubService()
         analyzer = GitHubAnalyzer(github_service)
         analysis_result = await analyzer.analyze_developer(github_username)
         
         # Save to database
-        db_repo = DatabaseRepository()
         skill_processor = SkillProcessor(db_repo)
         
         # Create or get user
@@ -745,6 +757,81 @@ async def list_removed_developers() -> Dict[str, Any]:
         
     except Exception as e:
         logger.error(f"Error listing removed developers: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def permanently_delete_developer(
+    github_username: Optional[str] = None,
+    jira_email: Optional[str] = None,
+    confirm: bool = False
+) -> Dict[str, Any]:
+    """
+    PERMANENTLY DELETE a developer and ALL their data (GDPR "right to be forgotten").
+    This is irreversible! All analyses, competences, and history will be removed.
+    
+    ⚠️ WARNING: This is a hard delete. Data cannot be recovered!
+    
+    Args:
+        github_username: GitHub username of the developer to delete
+        jira_email: Jira email of the developer to delete
+        confirm: Must be True to proceed (safety check)
+        
+    Returns:
+        Confirmation of permanent deletion
+    """
+    try:
+        from db.repository import DatabaseRepository
+        
+        if not confirm:
+            return {
+                "status": "error",
+                "error": "Confirmation required. Set confirm=True to proceed with permanent deletion.",
+                "warning": "⚠️ This will permanently delete ALL data for this developer. This action cannot be undone!",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        if not github_username and not jira_email:
+            return {
+                "status": "error",
+                "error": "Either github_username or jira_email must be provided",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        db_repo = DatabaseRepository()
+        result = db_repo.delete_user_permanently(github_username, jira_email)
+        
+        if result.get("success"):
+            return {
+                "status": "success",
+                "message": "Developer permanently deleted (GDPR compliance)",
+                "developer": {
+                    "github_username": result.get('github_username'),
+                    "full_name": result.get('full_name'),
+                    "user_id": result.get('user_id')
+                },
+                "deleted_data": [
+                    "User profile",
+                    "All competence records",
+                    "All analysis history",
+                    "All associated timestamps"
+                ],
+                "warning": "This action cannot be undone",
+                "timestamp": datetime.now().isoformat()
+            }
+        else:
+            return {
+                "status": "error",
+                "error": result.get("error"),
+                "timestamp": datetime.now().isoformat()
+            }
+        
+    except Exception as e:
+        logger.error(f"Error permanently deleting developer: {e}")
         return {
             "status": "error",
             "error": str(e),

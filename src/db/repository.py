@@ -481,4 +481,74 @@ class DatabaseRepository:
         except Exception as e:
             logger.error(f"Error getting inactive users: {e}")
             raise
-
+    
+    def delete_user_permanently(
+        self,
+        github_username: Optional[str] = None,
+        jira_email: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Permanently delete a user and all their data from the database.
+        This is a hard delete - all data will be removed (GDPR compliance).
+        
+        Args:
+            github_username: GitHub username
+            jira_email: Jira email address
+            
+        Returns:
+            Dictionary with deletion details
+        """
+        try:
+            conditions = []
+            params = []
+            
+            if github_username is not None:
+                conditions.append("github_username = %s")
+                params.append(github_username)
+            
+            if jira_email is not None:
+                conditions.append("jira_email = %s")
+                params.append(jira_email)
+            
+            if not conditions:
+                return {
+                    "success": False,
+                    "error": "No identifier provided"
+                }
+            
+            # First, get user details for logging
+            query = f"SELECT * FROM users WHERE {' OR '.join(conditions)} LIMIT 1"
+            user_results = self.db.execute_query(query, tuple(params))
+            
+            if not user_results:
+                return {
+                    "success": False,
+                    "error": "User not found"
+                }
+            
+            user = dict(user_results[0])
+            user_id = user['id']
+            
+            # Delete user (CASCADE will delete related data)
+            delete_query = "DELETE FROM users WHERE id = %s RETURNING id, github_username, full_name"
+            delete_results = self.db.execute_query(delete_query, (user_id,))
+            
+            if delete_results:
+                deleted_user = delete_results[0]
+                logger.warning(f"PERMANENTLY DELETED user: {deleted_user['github_username']} (ID: {deleted_user['id']})")
+                return {
+                    "success": True,
+                    "user_id": user_id,
+                    "github_username": user.get('github_username'),
+                    "full_name": user.get('full_name'),
+                    "message": "User and all associated data permanently deleted"
+                }
+            else:
+                return {
+                    "success": False,
+                    "error": "Failed to delete user"
+                }
+            
+        except Exception as e:
+            logger.error(f"Error permanently deleting user: {e}")
+            raise
