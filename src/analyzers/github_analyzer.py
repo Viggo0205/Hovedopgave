@@ -1,10 +1,13 @@
 """GitHub analyzer for analyzing and processing GitHub data."""
 
+import logging
 from typing import Dict, Any
 from collections import defaultdict
-from services.github_service import GitHubService
+from services.github_service import GitHubService, GitHubServiceDegradedException
 from models.analysis import GitHubAnalysisResult
 from shared.language_categories import LANGUAGE_CATEGORIES
+
+logger = logging.getLogger(__name__)
 
 
 
@@ -15,30 +18,46 @@ class GitHubAnalyzer:
         self.github_service = github_service
     
     async def analyze_developer(self, username: str) -> Dict[str, Any]:
-        """Analyze developer skills based on GitHub data."""
-        
-        # Get raw data from service
-        profile = self.github_service.get_user_profile(username)
-        repositories = self.github_service.get_user_repositories(username)
-        language_data = self.github_service.get_language_data(repositories)
-        
-        # ANALYSIS LOGIC HERE - using data from service
-        language_stats = self._analyze_language_skills(language_data, repositories)
-        expertise_areas = self._categorize_from_language_stats(language_stats)
-        
-        return {
-            "username": username,
-            "profile": profile,
-            "language_skills": language_stats,
-            "expertise_areas": expertise_areas,
-            "total_repositories": len(repositories)
-        }
+        """Analyze developer skills based on GitHub data with rate limiting protection."""
+        try:
+            # Check if service is degraded before starting
+            if GitHubService.is_degraded():
+                logger.error(f"Cannot analyze {username} - GitHub service is degraded")
+                return {
+                    "error": "GitHub integration is temporarily unavailable",
+                    "username": username,
+                    "degraded": True
+                }
+            
+            # Get raw data from service (all async now)
+            profile = await self.github_service.get_user_profile(username)
+            repositories = await self.github_service.get_user_repositories(username)
+            language_data = self.github_service.get_language_data(repositories)
+            
+            # ANALYSIS LOGIC HERE - using data from service
+            language_stats = self._analyze_language_skills(language_data, repositories)
+            expertise_areas = self._categorize_from_language_stats(language_stats)
+            
+            return {
+                "username": username,
+                "profile": profile,
+                "language_skills": language_stats,
+                "expertise_areas": expertise_areas,
+                "total_repositories": len(repositories)
+            }
+        except GitHubServiceDegradedException as e:
+            logger.error(f"GitHub service degraded while analyzing {username}: {e}")
+            return {
+                "error": str(e),
+                "username": username,
+                "degraded": True
+            }
     
     async def analyze_developer_full(self, username: str) -> GitHubAnalysisResult:
         """Analyze developer and return structured GitHubAnalysisResult object."""
-        # Get raw data from service
-        profile = self.github_service.get_user_profile(username)
-        repositories = self.github_service.get_user_repositories(username)
+        # Get raw data from service (async)
+        profile = await self.github_service.get_user_profile(username)
+        repositories = await self.github_service.get_user_repositories(username)
         language_data = self.github_service.get_language_data(repositories)
         
         # Create GitHubAnalysisResult object
@@ -59,8 +78,8 @@ class GitHubAnalyzer:
     
     async def get_basic_profile(self, username: str) -> Dict[str, Any]:
         """Get basic profile info for quick queries."""
-        profile = self.github_service.get_user_profile(username)
-        repositories = self.github_service.get_user_repositories(username)
+        profile = await self.github_service.get_user_profile(username)
+        repositories = await self.github_service.get_user_repositories(username)
         language_data = self.github_service.get_language_data(repositories)
         
         return {

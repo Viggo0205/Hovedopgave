@@ -59,7 +59,7 @@ async def analyze_github_developer(
         # Perform the analysis
         analysis_result = await analyzer.analyze_developer(username)
         
-        return {
+        result = {
             "developer": username,
             "analysis_type": "github",
             "data_source": "real_api",
@@ -69,8 +69,14 @@ async def analyze_github_developer(
             "language_skills": analysis_result.get("language_skills", {}),
             "expertise_areas": analysis_result.get("expertise_areas", {}),
             "total_repositories": analysis_result.get("total_repositories", 0),
-            "analysis_date": datetime.now().isoformat()
+            "analysis_date": datetime.now().isoformat(),
+            "_save_prompt": f"\n\n💾 Would you like to save this analysis to the database?\n\nUse: save_analysis_to_database(github_username='{username}')\n\nThis will store the analysis for version tracking and historical comparison."
         }
+        
+        # Log the prompt for the AI to see
+        logger.info(f"Analysis complete for {username}. Prompting to save to database.")
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error analyzing GitHub developer {username}: {str(e)}")
@@ -118,7 +124,8 @@ async def get_github_profile(
             "developer": github_username,
             "analysis_type": "github_profile",
             "profile_data": profile_result,
-            "analysis_date": datetime.now().isoformat()
+            "analysis_date": datetime.now().isoformat(),
+            "_save_prompt": f"\n\n💾 Would you like to save this profile to the database?\n\nUse: save_analysis_to_database(github_username='{github_username}')\n\nNote: This only saves basic profile. For full analysis, use analyze_github_developer first."
         }
         
     except Exception as e:
@@ -172,7 +179,8 @@ async def compare_developers(
                 "dev2_languages": len(dev2_analysis.get("language_skills", {})),
                 "dev1_repos": dev1_analysis.get("total_repositories", 0),
                 "dev2_repos": dev2_analysis.get("total_repositories", 0)
-            }
+            },
+            "_save_prompt": f"\n\n💾 Would you like to save both developer analyses to the database?\n\nDeveloper 1: save_analysis_to_database(github_username='{developer1_github}')\nDeveloper 2: save_analysis_to_database(github_username='{developer2_github}')\n\nSaving allows for historical tracking and future comparisons."
         }
         
     except Exception as e:
@@ -506,7 +514,7 @@ async def save_analysis_to_database(
         analyzer = GitHubAnalyzer(github_service)
         analysis_result = await analyzer.analyze_developer(github_username)
         
-        # Save to database
+        # Initialize database and skill processor
         db_repo = DatabaseRepository()
         skill_processor = SkillProcessor(db_repo)
         
@@ -516,20 +524,100 @@ async def save_analysis_to_database(
             full_name=full_name or github_username
         )
         
-        # Save analysis
+        # Process skills from analysis
+        skill_assessment = skill_processor.process_github_data(analysis_result)
+        
+        # Extract and save ALL skills (technical, soft, domain) to user_competence table
+        skills_saved = 0
+        skills_failed = []
+        
+        # Get all skill types
+        all_skills = []
+        all_skills.extend(skill_assessment.get("technical_skills", []))
+        all_skills.extend(skill_assessment.get("soft_skills", []))
+        all_skills.extend(skill_assessment.get("domain_skills", []))
+        
+        for skill in all_skills:
+            try:
+                # Get skill details
+                competence_name = skill.get("name")
+                if not competence_name:
+                    continue
+                
+                # Determine category from skill data
+                skill_category = skill.get("category", "programming_languages")
+                
+                # Ensure the competence exists in the database (ON CONFLICT DO UPDATE)
+                db_repo.add_competence(
+                    name=competence_name,
+                    category=skill_category,
+                    description=f"{competence_name} skill from {skill_category}"
+                )
+                
+                # Calculate percentage from skill level and confidence
+                confidence = skill.get("confidence_score", 0.5)
+                usage_freq = skill.get("usage_frequency", 0)
+                
+                # Get skill level - handle both string and enum formats
+                level = skill.get("level", "intermediate")
+                if hasattr(level, 'name'):  # It's an enum
+                    level_str = level.name.lower()
+                elif hasattr(level, 'value'):  # Pydantic model
+                    level_str = level.value.lower()
+                else:  # It's already a string
+                    level_str = str(level).lower().replace("skilllevel.", "")
+                
+                # Convert skill level to percentage (0-100)
+                level_map = {
+                    "beginner": 20,
+                    "intermediate": 50,
+                    "advanced": 75,
+                    "expert": 95
+                }
+                base_percent = level_map.get(level_str, 50)
+                
+                # Adjust based on confidence (±20%)
+                adjusted_percent = min(max(base_percent + (confidence - 0.5) * 40, 0), 100)
+                
+                # Update user competence
+                db_repo.update_user_competence(
+                    user_id=user_id,
+                    competence_name=competence_name,
+                    procent=round(adjusted_percent, 2),
+                    usage_frequency=usage_freq
+                )
+                
+                skills_saved += 1
+                logger.info(f"✓ Saved: {competence_name} ({skill_category}) = {adjusted_percent:.1f}% [usage: {usage_freq}]")
+                
+            except Exception as skill_error:
+                error_msg = f"{skill.get('name', 'Unknown')}: {str(skill_error)}"
+                skills_failed.append(error_msg)
+                logger.warning(f"✗ Failed to save skill: {error_msg}")
+                continue
+        
+        # Save full analysis to archive
         analysis_version = db_repo.save_analysis(
             user_id=user_id,
             analysis_data=analysis_result
         )
         
-        return {
+        result = {
             "status": "success",
             "user_id": user_id,
             "analysis_version": analysis_version,
+            "skills_saved": skills_saved,
+            "total_skills_found": len(all_skills),
             "github_username": github_username,
-            "message": "Analysis saved to database",
+            "message": f"✓ Analysis saved: {skills_saved}/{len(all_skills)} skills stored in database",
             "timestamp": datetime.now().isoformat()
         }
+        
+        if skills_failed:
+            result["skills_failed"] = skills_failed
+            result["warning"] = f"{len(skills_failed)} skills could not be saved"
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error saving analysis to database: {e}")

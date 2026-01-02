@@ -24,8 +24,13 @@ class Config:
         self.jira_api_token: Optional[str] = os.getenv("JIRA_API_TOKEN")
         
         # Rate Limiting Configuration
+        # GitHub API: Free tier = 5000 req/hour, service uses 60 req/min to stay safe
+        # Circuit breaker: After 3 consecutive failures, mark service degraded for 5 minutes
         self.api_rate_limit: int = int(os.getenv("API_RATE_LIMIT", "100"))
         self.github_rate_limit: int = int(os.getenv("GITHUB_RATE_LIMIT", "5000"))
+        self.github_requests_per_minute: int = int(os.getenv("GITHUB_REQUESTS_PER_MINUTE", "60"))
+        self.github_max_failures: int = int(os.getenv("GITHUB_MAX_FAILURES", "3"))
+        self.github_degraded_duration: int = int(os.getenv("GITHUB_DEGRADED_DURATION_SECONDS", "300"))
         self.jira_rate_limit: int = int(os.getenv("JIRA_RATE_LIMIT", "200"))
         
         # Cache Configuration
