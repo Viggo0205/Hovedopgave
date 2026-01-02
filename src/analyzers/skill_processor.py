@@ -150,40 +150,86 @@ class SkillProcessor:
         self, github_data: Dict[str, Any], assessment: SkillAssessment
     ) -> None:
         """Extract programming language skills from GitHub data."""
+        # Try both data formats for backward compatibility
+        language_skills = github_data.get("language_skills", {})
         language_distribution = github_data.get("language_distribution", {})
-        primary_languages = github_data.get("primary_languages", [])
-        total_commits = github_data.get("total_commits", 0)
         
-        for language, percentage in language_distribution.items():
-            if percentage < 0.05:  # Skip languages with less than 5% usage
-                continue
+        # If we have language_skills (new format), use that
+        if language_skills:
+            for language, skill_data in language_skills.items():
+                # Extract data from the skill_data dict
+                level_str = skill_data.get("level", "Intermediate")
+                total_lines = skill_data.get("total_lines", 0)
+                repo_count = skill_data.get("repositories", 1)
+                
+                # Map level string to SkillLevel enum
+                level_map = {
+                    "Expert": SkillLevel.EXPERT,
+                    "Advanced": SkillLevel.ADVANCED,
+                    "Intermediate": SkillLevel.INTERMEDIATE,
+                    "Beginner": SkillLevel.BEGINNER
+                }
+                skill_level = level_map.get(level_str, SkillLevel.INTERMEDIATE)
+                
+                # Calculate confidence based on lines of code and repo count
+                confidence = min((total_lines / 10000) * (repo_count / 5), 1.0)
+                confidence = max(confidence, 0.3)  # Minimum confidence
+                
+                # Create evidence
+                evidence = SkillEvidence(
+                    source="github_repositories",
+                    description=f"Used {language} in {repo_count} repositories with {total_lines:,} lines",
+                    confidence=confidence,
+                    frequency=total_lines,
+                    recency=datetime.now()
+                )
+                
+                # Create skill
+                skill = Skill(
+                    name=language,
+                    category=SkillCategory.PROGRAMMING_LANGUAGE,
+                    level=skill_level,
+                    confidence_score=confidence,
+                    usage_frequency=total_lines,
+                    trend="stable"
+                )
+                skill.add_evidence(evidence)
+                assessment.add_skill(skill)
+                
+        # Fallback to old format (language_distribution)
+        elif language_distribution:
+            primary_languages = github_data.get("primary_languages", [])
+            total_commits = github_data.get("total_commits", 0)
             
-            # Determine skill level based on usage and commit count
-            skill_level = self._calculate_language_skill_level(
-                language, percentage, total_commits, primary_languages
-            )
-            
-            # Create evidence
-            evidence = SkillEvidence(
-                source="github_commits",
-                description=f"Used {language} in {percentage:.1%} of code across repositories",
-                confidence=min(percentage * 2, 1.0),
-                frequency=int(total_commits * percentage),
-                recency=datetime.now()
-            )
-            
-            # Create skill
-            skill = Skill(
-                name=language,
-                category=SkillCategory.PROGRAMMING_LANGUAGE,
-                level=skill_level,
-                confidence_score=min(percentage * 2, 1.0),
-                usage_frequency=int(total_commits * percentage),
-                trend="stable"  # Could be enhanced with historical data
-            )
-            skill.add_evidence(evidence)
-            
-            assessment.add_skill(skill)
+            for language, percentage in language_distribution.items():
+                if percentage < 0.05:  # Skip languages with less than 5% usage
+                    continue
+                
+                # Determine skill level based on usage and commit count
+                skill_level = self._calculate_language_skill_level(
+                    language, percentage, total_commits, primary_languages
+                )
+                
+                # Create evidence
+                evidence = SkillEvidence(
+                    source="github_commits",
+                    description=f"Used {language} in {percentage:.1%} of code across repositories",
+                    confidence=min(percentage * 2, 1.0),
+                    frequency=int(total_commits * percentage),
+                    recency=datetime.now()
+                )
+                
+                # Create skill
+                skill = Skill(
+                    name=language,
+                    category=SkillCategory.PROGRAMMING_LANGUAGE,
+                    level=skill_level,
+                    confidence_score=min(percentage * 2, 1.0),
+                    usage_frequency=int(total_commits * percentage),
+                    trend="stable"
+                )
+                skill.add_evidence(evidence)
+                assessment.add_skill(skill)
     
     def _calculate_language_skill_level(
         self, language: str, percentage: float, total_commits: int, primary_languages: List[str]
