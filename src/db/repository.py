@@ -552,3 +552,98 @@ class DatabaseRepository:
         except Exception as e:
             logger.error(f"Error permanently deleting user: {e}")
             raise
+
+    def get_users_by_competence(
+        self,
+        competence_name: str,
+        min_level: Optional[str] = None,
+        include_inactive: bool = False
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all users who have a specific competence/skill.
+        
+        Args:
+            competence_name: Name of the competence/skill to search for
+            min_level: Minimum rank level filter ('Beginner', 'Intermediate', 'Advanced', 'Expert')
+            include_inactive: If True, include deactivated users in results
+            
+        Returns:
+            List of users with the specified competence and their proficiency details
+        """
+        try:
+            # Build query using the user_competence_overview view
+            query = """
+                SELECT 
+                    user_id,
+                    github_username,
+                    full_name,
+                    display_name,
+                    company,
+                    location,
+                    role_name,
+                    competence_name,
+                    competence_category,
+                    procent,
+                    rank_name,
+                    usage_frequency,
+                    last_updated
+                FROM user_competence_overview uco
+                JOIN users u ON uco.user_id = u.id
+                WHERE LOWER(uco.competence_name) = LOWER(%s)
+            """
+            params = [competence_name]
+            
+            # Filter by active status
+            if not include_inactive:
+                query += " AND u.is_active = TRUE"
+            
+            # Filter by minimum level if specified
+            if min_level:
+                level_order = {
+                    'beginner': 1,
+                    'intermediate': 2,
+                    'advanced': 3,
+                    'expert': 4
+                }
+                min_level_num = level_order.get(min_level.lower(), 0)
+                
+                if min_level_num > 0:
+                    # Use rank table to filter by minimum level
+                    query += """
+                        AND uco.procent >= (
+                            SELECT min_percent FROM rank 
+                            WHERE LOWER(name) = LOWER(%s)
+                        )
+                    """
+                    params.append(min_level)
+            
+            query += " ORDER BY uco.procent DESC, uco.github_username"
+            
+            results = self.db.execute_query(query, tuple(params))
+            
+            users = []
+            for row in results:
+                users.append({
+                    'user_id': row['user_id'],
+                    'github_username': row['github_username'],
+                    'full_name': row['full_name'],
+                    'display_name': row['display_name'],
+                    'company': row['company'],
+                    'location': row['location'],
+                    'role': row['role_name'],
+                    'competence': {
+                        'name': row['competence_name'],
+                        'category': row['competence_category'],
+                        'proficiency_percent': float(row['procent']),
+                        'rank': row['rank_name'],
+                        'usage_frequency': row['usage_frequency'],
+                        'last_updated': row['last_updated'].isoformat() if row['last_updated'] else None
+                    }
+                })
+            
+            logger.info(f"Found {len(users)} users with competence: {competence_name}")
+            return users
+            
+        except Exception as e:
+            logger.error(f"Error getting users by competence: {e}")
+            return []

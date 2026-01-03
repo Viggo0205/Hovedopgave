@@ -765,6 +765,239 @@ async def list_removed_developers() -> Dict[str, Any]:
 
 
 @mcp.tool()
+async def get_employees_by_skill(
+    skill_name: str,
+    min_level: Optional[str] = None,
+    include_inactive: bool = False,
+    use_github_fallback: bool = True,
+    github_search_scope: str = "collaborators"
+) -> Dict[str, Any]:
+    """
+    Find all employees/developers who have a specific skill or competence.
+    
+    Searches database first. If no results found, optionally falls back to analyzing 
+    GitHub users directly.
+    
+    Args:
+        skill_name: Name of the skill/competence to search for (e.g., "Python", "JavaScript", "React")
+        min_level: Minimum proficiency level filter - one of: "Beginner", "Intermediate", "Advanced", "Expert"
+        include_inactive: If True, also include deactivated/removed users in results
+        use_github_fallback: If True, fetch and analyze GitHub users when database has no results
+        github_search_scope: What to search on GitHub - "collaborators" (default), "organizations", or "followers"
+        
+    Returns:
+        List of employees with the specified skill, including their proficiency details
+    """
+    try:
+        from db.repository import DatabaseRepository
+        
+        logger.info(f"Searching for employees with skill: {skill_name} (min_level: {min_level})")
+        
+        db_repo = DatabaseRepository()
+        users = db_repo.get_users_by_competence(
+            competence_name=skill_name,
+            min_level=min_level,
+            include_inactive=include_inactive
+        )
+        
+        # Database has results - return them
+        if users:
+            rank_summary = {}
+            for user in users:
+                rank = user['competence']['rank']
+                rank_summary[rank] = rank_summary.get(rank, 0) + 1
+            
+            return {
+                "status": "success",
+                "data_source": "database",
+                "skill_name": skill_name,
+                "min_level": min_level,
+                "include_inactive": include_inactive,
+                "total_count": len(users),
+                "rank_distribution": rank_summary,
+                "employees": users,
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # No database results - try GitHub fallback if enabled
+        if use_github_fallback:
+            logger.info(f"No database results for {skill_name}, attempting GitHub fallback (scope: {github_search_scope})...")
+            
+            try:
+                # Get GitHub users based on scope
+                config = Config()
+                if not config.github_token:
+                    return {
+                        "status": "success",
+                        "data_source": "database",
+                        "message": "No employees found in database and GitHub fallback unavailable (no token)",
+                        "skill_name": skill_name,
+                        "min_level": min_level,
+                        "employees": [],
+                        "total_count": 0,
+                        "timestamp": datetime.now().isoformat()
+                    }
+                
+                github_service = GitHubService()
+                analyzer = GitHubAnalyzer(github_service)
+                
+                from github import Github, Auth
+                auth = Auth.Token(config.github_token)
+                g = Github(auth=auth)
+                user = g.get_user()
+                
+                discovered = []
+                
+                # Get users based on search scope
+                if github_search_scope == "organizations":
+                    # Get org members
+                    for org in user.get_orgs():
+                        members = github_service.get_organization_members(org.login)
+                        discovered.extend(members)
+                
+                elif github_search_scope == "followers":
+                    # Get followers
+                    for follower in user.get_followers():
+                        discovered.append({
+                            "username": follower.login,
+                            "name": follower.name,
+                            "company": follower.company
+                        })
+                
+                else:  # collaborators (default)
+                    # Get contributors from user's repositories (including the repo owner)
+                    collaborators_set = set()
+                    # Add the authenticated user
+                    collaborators_set.add(user.login)
+                    
+                    for repo in user.get_repos(type='public'):
+                        try:
+                            # Get contributors for each repo
+                            for contributor in repo.get_contributors():
+                                collaborators_set.add(contributor.login)
+                        except Exception as repo_error:
+                            logger.debug(f"Could not get contributors for {repo.name}: {repo_error}")
+                            continue
+                    
+                    # Convert set to list of user dicts
+                    for collab_username in collaborators_set:
+                        try:
+                            collab_user = g.get_user(collab_username)
+                            discovered.append({
+                                "username": collab_user.login,
+                                "name": collab_user.name,
+                                "company": collab_user.company
+                            })
+                        except Exception as e:
+                            logger.debug(f"Could not fetch user {collab_username}: {e}")
+                            continue
+                
+                # Deduplicate by username
+                unique_members = {emp['username']: emp for emp in discovered}.values()
+                
+                logger.info(f"Found {len(unique_members)} GitHub users (scope: {github_search_scope}), analyzing for {skill_name}...")
+                
+                # Analyze each member for the requested skill
+                matching_employees = []
+                for member in unique_members:
+                    try:
+                        username = member['username']
+                        analysis = await analyzer.analyze_developer(username)
+                        
+                        # Check if they have the skill
+                        language_skills = analysis.get('language_skills', {})
+                        
+                        # Check if skill_name matches any language (case-insensitive)
+                        for lang_name, lang_data in language_skills.items():
+                            if lang_name.lower() == skill_name.lower():
+                                level = lang_data.get('level', 'Beginner')
+                                
+                                # Apply min_level filter if specified
+                                if min_level:
+                                    level_order = {'Beginner': 1, 'Intermediate': 2, 'Advanced': 3, 'Expert': 4}
+                                    if level_order.get(level, 0) < level_order.get(min_level, 0):
+                                        continue
+                                
+                                matching_employees.append({
+                                    'user_id': None,
+                                    'github_username': username,
+                                    'full_name': member.get('name'),
+                                    'display_name': username,
+                                    'company': member.get('company'),
+                                    'location': None,
+                                    'role': None,
+                                    'competence': {
+                                        'name': lang_name,
+                                        'category': 'programming_languages',
+                                        'proficiency_percent': None,
+                                        'rank': level,
+                                        'total_lines': lang_data.get('total_lines'),
+                                        'repositories': lang_data.get('repositories'),
+                                        'usage_frequency': None,
+                                        'last_updated': None
+                                    }
+                                })
+                                break
+                    
+                    except Exception as member_error:
+                        logger.warning(f"Failed to analyze member {member.get('username')}: {member_error}")
+                        continue
+                
+                # Group by rank for summary
+                rank_summary = {}
+                for emp in matching_employees:
+                    rank = emp['competence']['rank']
+                    rank_summary[rank] = rank_summary.get(rank, 0) + 1
+                
+                return {
+                    "status": "success",
+                    "data_source": f"github_fallback_{github_search_scope}",
+                    "message": f"No database results found. Analyzed {len(unique_members)} GitHub users from {github_search_scope}.",
+                    "skill_name": skill_name,
+                    "min_level": min_level,
+                    "total_count": len(matching_employees),
+                    "rank_distribution": rank_summary,
+                    "employees": matching_employees,
+                    "timestamp": datetime.now().isoformat()
+                }
+                
+            except Exception as fallback_error:
+                logger.error(f"GitHub fallback failed: {fallback_error}")
+                return {
+                    "status": "success",
+                    "data_source": "database",
+                    "message": f"No employees found in database. GitHub fallback failed: {str(fallback_error)}",
+                    "skill_name": skill_name,
+                    "min_level": min_level,
+                    "employees": [],
+                    "total_count": 0,
+                    "timestamp": datetime.now().isoformat()
+                }
+        
+        # No results and fallback disabled
+        return {
+            "status": "success",
+            "data_source": "database",
+            "message": f"No employees found with skill: {skill_name}" + 
+                      (f" at {min_level} level or above" if min_level else ""),
+            "skill_name": skill_name,
+            "min_level": min_level,
+            "employees": [],
+            "total_count": 0,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Error getting employees by skill: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "skill_name": skill_name,
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
 async def permanently_delete_developer(
     github_username: Optional[str] = None,
     jira_email: Optional[str] = None,
