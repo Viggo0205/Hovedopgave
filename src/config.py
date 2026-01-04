@@ -17,7 +17,7 @@ class Config:
         )
         self.github_username: Optional[str] = os.getenv("GITHUB_USERNAME")
 
-        # der er intet der bliver brugt her
+        # der er intet der bliver brugt her endnu
         # Jira API Configuration
         self.jira_server_url: Optional[str] = os.getenv("JIRA_SERVER_URL")
         self.jira_email: Optional[str] = os.getenv("JIRA_EMAIL")
