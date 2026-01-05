@@ -1,5 +1,15 @@
--- Developer Skill Analyzer Database Schema
--- DROP TABLES
+-- Developer Skill Analyzer Database Schema (Normalized with Version Tracking)
+
+-- DROP FUNCTIONS FIRST (to avoid signature conflicts)
+DROP FUNCTION IF EXISTS get_latest_analysis(integer) CASCADE;
+DROP FUNCTION IF EXISTS get_competences_for_version(integer, integer) CASCADE;
+DROP FUNCTION IF EXISTS save_analysis(integer, jsonb) CASCADE;
+DROP FUNCTION IF EXISTS save_analysis(integer, jsonb, integer, varchar) CASCADE;
+DROP FUNCTION IF EXISTS update_user_competence(integer, integer, numeric, integer) CASCADE;
+DROP FUNCTION IF EXISTS update_user_competence(integer, integer, numeric, integer, integer) CASCADE;
+
+-- DROP TABLES (in dependency order)
+DROP TABLE IF EXISTS user_competence_history CASCADE;
 DROP TABLE IF EXISTS analysis_archive CASCADE;
 DROP TABLE IF EXISTS user_competence CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
@@ -66,7 +76,7 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 
--- USER_COMPETENCE
+-- USER_COMPETENCE (Current/Latest competences only)
 CREATE TABLE user_competence (
     user_id INT NOT NULL,
     competence_id INT NOT NULL,
@@ -80,13 +90,38 @@ CREATE TABLE user_competence (
 );
 
 
--- ANALYSIS_ARCHIVE: Stores historical analysis data (max 2 versions per user)
+-- USER_COMPETENCE_HISTORY (Versioned historical competence data)
+-- This is the NORMALIZED way to track historical changes
+CREATE TABLE user_competence_history (
+    id SERIAL PRIMARY KEY,
+    user_id INT NOT NULL,
+    competence_id INT NOT NULL,
+    procent NUMERIC(5,2) NOT NULL CHECK (procent >= 0 AND procent <= 100),
+    usage_frequency INT DEFAULT 0,
+    analysis_version INT NOT NULL,
+    recorded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_history_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_history_competence FOREIGN KEY (competence_id) REFERENCES competence(id) ON DELETE CASCADE,
+    CONSTRAINT chk_history_version CHECK (analysis_version IN (1, 2)),
+    UNIQUE (user_id, competence_id, analysis_version)
+);
+
+-- Indexes for efficient historical queries
+CREATE INDEX idx_history_user_version ON user_competence_history(user_id, analysis_version);
+CREATE INDEX idx_history_recorded_at ON user_competence_history(recorded_at);
+
+
+-- ANALYSIS_ARCHIVE (Metadata only - NO competence duplication)
+-- Stores only context data that's not in normalized tables
 CREATE TABLE analysis_archive (
     id SERIAL PRIMARY KEY,
     user_id INT NOT NULL,
-    analysis_data JSONB NOT NULL,
+    metadata JSONB NOT NULL,  -- Profile info, repo details, raw language data (NOT processed competences)
     analysis_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     version_number INT NOT NULL,
+    total_repositories INT DEFAULT 0,
+    data_source VARCHAR(50) DEFAULT 'github',
     
     CONSTRAINT fk_archive_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
     CONSTRAINT chk_version CHECK (version_number IN (1, 2))
@@ -96,7 +131,7 @@ CREATE TABLE analysis_archive (
 CREATE INDEX idx_archive_user_version ON analysis_archive(user_id, version_number);
 
 
--- VIEW: User Competence Overview
+-- VIEW: User Competence Overview (current competences)
 CREATE OR REPLACE VIEW user_competence_overview AS
 SELECT 
     u.id AS user_id,
@@ -121,6 +156,28 @@ LEFT JOIN role r ON u.role_id = r.id
 JOIN rank rk 
     ON uc.procent BETWEEN rk.min_percent AND rk.max_percent
 ORDER BY u.id, c.category, c.name;
+
+
+-- VIEW: Historical Competence Overview (versioned history)
+CREATE OR REPLACE VIEW user_competence_history_overview AS
+SELECT 
+    u.id AS user_id,
+    u.github_username,
+    u.full_name,
+    c.id AS competence_id,
+    c.name AS competence_name,
+    c.category AS competence_category,
+    uch.procent,
+    uch.usage_frequency,
+    rk.name AS rank_name,
+    uch.analysis_version,
+    uch.recorded_at
+FROM user_competence_history uch
+JOIN users u ON uch.user_id = u.id
+JOIN competence c ON uch.competence_id = c.id
+JOIN rank rk 
+    ON uch.procent BETWEEN rk.min_percent AND rk.max_percent
+ORDER BY u.id, uch.analysis_version DESC, c.category, c.name;
 
 
 -- VIEW: Competence Categories (for skill processor initialization)
@@ -155,34 +212,47 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- STORED PROCEDURE: Update user competence
+-- STORED PROCEDURE: Update user competence (updates both current and history)
 CREATE OR REPLACE FUNCTION update_user_competence(
     p_user_id INT,
     p_competence_id INT,
     p_procent NUMERIC(5,2),
-    p_usage_frequency INT DEFAULT 0
+    p_usage_frequency INT DEFAULT 0,
+    p_analysis_version INT DEFAULT NULL
 )
 RETURNS VOID AS $$
 BEGIN
+    -- Always update current competence
     INSERT INTO user_competence (user_id, competence_id, procent, usage_frequency, last_updated)
     VALUES (p_user_id, p_competence_id, p_procent, p_usage_frequency, CURRENT_TIMESTAMP)
     ON CONFLICT (user_id, competence_id) DO UPDATE
         SET procent = EXCLUDED.procent,
             usage_frequency = EXCLUDED.usage_frequency,
             last_updated = CURRENT_TIMESTAMP;
+    
+    -- If version specified, also save to history table
+    IF p_analysis_version IS NOT NULL THEN
+        INSERT INTO user_competence_history (user_id, competence_id, procent, usage_frequency, analysis_version, recorded_at)
+        VALUES (p_user_id, p_competence_id, p_procent, p_usage_frequency, p_analysis_version, CURRENT_TIMESTAMP)
+        ON CONFLICT (user_id, competence_id, analysis_version) DO UPDATE
+            SET procent = EXCLUDED.procent,
+                usage_frequency = EXCLUDED.usage_frequency,
+                recorded_at = CURRENT_TIMESTAMP;
+    END IF;
 END;
 $$ LANGUAGE plpgsql;
 
 
--- STORED PROCEDURE: Save analysis with version management (keep max 2 versions)
+-- STORED PROCEDURE: Save analysis with version management (metadata only, competences in history table)
 CREATE OR REPLACE FUNCTION save_analysis(
     p_user_id INT,
-    p_analysis_data JSONB
+    p_metadata JSONB,
+    p_total_repositories INT DEFAULT 0,
+    p_data_source VARCHAR(50) DEFAULT 'github'
 )
 RETURNS INT AS $$
 DECLARE
     v_current_count INT;
-    v_oldest_id INT;
     v_new_version INT;
 BEGIN
     -- Count existing versions for this user
@@ -190,16 +260,25 @@ BEGIN
     FROM analysis_archive
     WHERE user_id = p_user_id;
     
-    -- If we have 2 versions, remove the oldest (version 1) and shift version 2 to version 1
+    -- Determine version number and manage rolling window
     IF v_current_count >= 2 THEN
-        -- Delete version 1
+        -- Delete oldest version from archive
         DELETE FROM analysis_archive
         WHERE user_id = p_user_id AND version_number = 1;
         
-        -- Update version 2 to version 1
+        -- Delete oldest competence history (version 1)
+        DELETE FROM user_competence_history
+        WHERE user_id = p_user_id AND analysis_version = 1;
+        
+        -- Shift version 2 to version 1 in archive
         UPDATE analysis_archive
         SET version_number = 1
         WHERE user_id = p_user_id AND version_number = 2;
+        
+        -- Shift version 2 to version 1 in competence history
+        UPDATE user_competence_history
+        SET analysis_version = 1
+        WHERE user_id = p_user_id AND analysis_version = 2;
         
         v_new_version := 2;
     ELSIF v_current_count = 1 THEN
@@ -208,30 +287,65 @@ BEGIN
         v_new_version := 1;
     END IF;
     
-    -- Insert new analysis as the latest version
-    INSERT INTO analysis_archive (user_id, analysis_data, version_number)
-    VALUES (p_user_id, p_analysis_data, v_new_version);
+    -- Insert new analysis metadata (NOT competences - those are in user_competence_history)
+    INSERT INTO analysis_archive (user_id, metadata, version_number, total_repositories, data_source)
+    VALUES (p_user_id, p_metadata, v_new_version, p_total_repositories, p_data_source);
     
     RETURN v_new_version;
 END;
 $$ LANGUAGE plpgsql;
 
 
--- STORED PROCEDURE: Get latest analysis
+-- STORED PROCEDURE: Get latest analysis (reconstructed from metadata + competence history)
 CREATE OR REPLACE FUNCTION get_latest_analysis(p_user_id INT)
 RETURNS TABLE(
     id INT,
-    analysis_data JSONB,
+    metadata JSONB,
     analysis_date TIMESTAMP,
-    version_number INT
+    version_number INT,
+    total_repositories INT
 ) AS $$
 BEGIN
     RETURN QUERY
-    SELECT a.id, a.analysis_data, a.analysis_date, a.version_number
+    SELECT a.id, a.metadata, a.analysis_date, a.version_number, a.total_repositories
     FROM analysis_archive a
     WHERE a.user_id = p_user_id
     ORDER BY a.version_number DESC
     LIMIT 1;
+END;
+$$ LANGUAGE plpgsql;
+
+
+-- STORED PROCEDURE: Get historical competences for a specific version
+CREATE OR REPLACE FUNCTION get_competences_for_version(
+    p_user_id INT,
+    p_version_number INT
+)
+RETURNS TABLE(
+    competence_id INT,
+    competence_name VARCHAR(100),
+    category VARCHAR(50),
+    procent NUMERIC(5,2),
+    usage_frequency INT,
+    rank_name VARCHAR(50),
+    recorded_at TIMESTAMP
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        c.id,
+        c.name,
+        c.category,
+        uch.procent,
+        uch.usage_frequency,
+        rk.name,
+        uch.recorded_at
+    FROM user_competence_history uch
+    JOIN competence c ON uch.competence_id = c.id
+    JOIN rank rk ON uch.procent BETWEEN rk.min_percent AND rk.max_percent
+    WHERE uch.user_id = p_user_id 
+      AND uch.analysis_version = p_version_number
+    ORDER BY c.category, c.name;
 END;
 $$ LANGUAGE plpgsql;
 

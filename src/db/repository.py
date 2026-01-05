@@ -134,16 +134,18 @@ class DatabaseRepository:
         user_id: int,
         competence_name: str,
         procent: float,
-        usage_frequency: int = 0
+        usage_frequency: int = 0,
+        analysis_version: Optional[int] = None
     ) -> None:
         """
-        Update user's competence level.
+        Update user's competence level (current + optional history).
         
         Args:
             user_id: User ID
             competence_name: Name of the competence
             procent: Competence percentage (0-100)
             usage_frequency: Usage frequency count
+            analysis_version: Optional version number to also save in history table (1 or 2)
         """
         try:
             # Get competence ID
@@ -156,39 +158,48 @@ class DatabaseRepository:
             
             competence_id = result[0]['id']
             
-            # Update user competence
-            query = "SELECT update_user_competence(%s, %s, %s, %s)"
-            self.db.execute_query(query, (user_id, competence_id, procent, usage_frequency), fetch=False)
+            # Update user competence (and history if version specified)
+            query = "SELECT update_user_competence(%s, %s, %s, %s, %s)"
+            self.db.execute_query(query, (user_id, competence_id, procent, usage_frequency, analysis_version), fetch=False)
             
-            logger.debug(f"Updated competence for user {user_id}: {competence_name} = {procent}%")
+            logger.debug(f"Updated competence for user {user_id}: {competence_name} = {procent}% (version: {analysis_version})")
             
         except Exception as e:
             logger.error(f"Error updating user competence: {e}")
             raise
     
-    def save_analysis(self, user_id: int, analysis_data: Dict[str, Any]) -> int:
+    def save_analysis(
+        self, 
+        user_id: int, 
+        metadata: Dict[str, Any],
+        total_repositories: int = 0,
+        data_source: str = 'github'
+    ) -> int:
         """
-        Save analysis data with version management (keeps max 2 versions).
+        Save analysis metadata with version management (keeps max 2 versions).
+        NOTE: Competences are stored in user_competence_history, not here.
         
         Args:
             user_id: User ID
-            analysis_data: Analysis data to save
+            metadata: Analysis metadata (profile, repos, raw data - NOT processed competences)
+            total_repositories: Total repository count
+            data_source: Source of analysis ('github' or 'jira')
             
         Returns:
             Version number of saved analysis
         """
         try:
             # Serialize datetime objects to ISO format strings
-            serialized_data = _serialize_datetime(analysis_data)
+            serialized_metadata = _serialize_datetime(metadata)
             
-            query = "SELECT save_analysis(%s, %s)"
+            query = "SELECT save_analysis(%s, %s, %s, %s)"
             result = self.db.execute_query(
                 query,
-                (user_id, json.dumps(serialized_data))
+                (user_id, json.dumps(serialized_metadata), total_repositories, data_source)
             )
             version = result[0]['save_analysis']
             
-            logger.info(f"Saved analysis for user {user_id} as version {version}")
+            logger.info(f"Saved analysis metadata for user {user_id} as version {version}")
             return version
             
         except Exception as e:
@@ -197,13 +208,14 @@ class DatabaseRepository:
     
     def get_latest_analysis(self, user_id: int) -> Optional[Dict[str, Any]]:
         """
-        Get the latest analysis for a user.
+        Get the latest analysis metadata for a user.
+        NOTE: This returns only metadata. Use get_competences_for_version() to get competences.
         
         Args:
             user_id: User ID
             
         Returns:
-            Analysis data or None if not found
+            Analysis metadata or None if not found
         """
         try:
             query = "SELECT * FROM get_latest_analysis(%s)"
@@ -215,9 +227,10 @@ class DatabaseRepository:
             result = results[0]
             return {
                 'id': result['id'],
-                'analysis_data': result['analysis_data'],
+                'metadata': result['metadata'],
                 'analysis_date': result['analysis_date'].isoformat() if result['analysis_date'] else None,
-                'version_number': result['version_number']
+                'version_number': result['version_number'],
+                'total_repositories': result['total_repositories']
             }
             
         except Exception as e:
@@ -226,17 +239,16 @@ class DatabaseRepository:
     
     def get_all_analyses(self, user_id: int) -> List[Dict[str, Any]]:
         """
-        Get all analyses for a user (max 2).
-        
+        Get all analysis metadata for a user (max 2).
         Args:
             user_id: User ID
             
         Returns:
-            List of analyses
+            List of analysis metadata
         """
         try:
             query = """
-                SELECT id, analysis_data, analysis_date, version_number
+                SELECT id, metadata, analysis_date, version_number, total_repositories, data_source
                 FROM analysis_archive
                 WHERE user_id = %s
                 ORDER BY version_number DESC
@@ -247,15 +259,50 @@ class DatabaseRepository:
             for row in results:
                 analyses.append({
                     'id': row['id'],
-                    'analysis_data': row['analysis_data'],
+                    'metadata': row['metadata'],
                     'analysis_date': row['analysis_date'].isoformat() if row['analysis_date'] else None,
-                    'version_number': row['version_number']
+                    'version_number': row['version_number'],
+                    'total_repositories': row.get('total_repositories', 0),
+                    'data_source': row.get('data_source', 'github')
                 })
             
             return analyses
             
         except Exception as e:
             logger.error(f"Error getting all analyses: {e}")
+            return []
+    
+    def get_competences_for_version(self, user_id: int, version_number: int) -> List[Dict[str, Any]]:
+        """
+        Get historical competences for a specific analysis version.
+        
+        Args:
+            user_id: User ID
+            version_number: Version number (1 or 2)
+            
+        Returns:
+            List of competences with their historical values
+        """
+        try:
+            query = "SELECT * FROM get_competences_for_version(%s, %s)"
+            results = self.db.execute_query(query, (user_id, version_number))
+            
+            competences = []
+            for row in results:
+                competences.append({
+                    'competence_id': row['competence_id'],
+                    'competence_name': row['competence_name'],
+                    'category': row['category'],
+                    'procent': float(row['procent']),
+                    'usage_frequency': row['usage_frequency'],
+                    'rank_name': row['rank_name'],
+                    'recorded_at': row['recorded_at'].isoformat() if row['recorded_at'] else None
+                })
+            
+            return competences
+            
+        except Exception as e:
+            logger.error(f"Error getting competences for version: {e}")
             return []
     
     def get_user_competence_overview(self, user_id: Optional[int] = None) -> List[Dict[str, Any]]:
