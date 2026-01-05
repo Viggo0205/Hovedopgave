@@ -496,7 +496,7 @@ async def save_analysis_to_database(
     full_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Analyze a developer and save results to the database.
+    Analyze a developer and save results to the database (normalized with versioning).
     
     Args:
         github_username: GitHub username for analysis
@@ -537,10 +537,25 @@ async def save_analysis_to_database(
             full_name=full_name or github_username
         )
         
+        # Save metadata FIRST to get version number
+        metadata = {
+            "profile": analysis_result.get("profile", {}),
+            "raw_language_data": analysis_result.get("language_skills", {}),
+            "expertise_areas": analysis_result.get("expertise_areas", {}),
+            "github_username": github_username
+        }
+        
+        analysis_version = db_repo.save_analysis(
+            user_id=user_id,
+            metadata=metadata,
+            total_repositories=analysis_result.get("total_repositories", 0),
+            data_source="github"
+        )
+        
         # Process skills from analysis
         skill_assessment = skill_processor.process_github_data(analysis_result)
         
-        # Extract and save ALL skills (technical, soft, domain) to user_competence table
+        # Extract and save ALL skills (technical, soft, domain) to BOTH current AND history
         skills_saved = 0
         skills_failed = []
         
@@ -560,7 +575,7 @@ async def save_analysis_to_database(
                 # Determine category from skill data
                 skill_category = skill.get("category", "programming_languages")
                 
-                # Ensure the competence exists in the database (ON CONFLICT DO UPDATE)
+                # Ensure the competence exists in the database
                 db_repo.add_competence(
                     name=competence_name,
                     category=skill_category,
@@ -592,28 +607,23 @@ async def save_analysis_to_database(
                 # Adjust based on confidence (±20%)
                 adjusted_percent = min(max(base_percent + (confidence - 0.5) * 40, 0), 100)
                 
-                # Update user competence
+                # Update user competence (BOTH current AND history with version)
                 db_repo.update_user_competence(
                     user_id=user_id,
                     competence_name=competence_name,
                     procent=round(adjusted_percent, 2),
-                    usage_frequency=usage_freq
+                    usage_frequency=usage_freq,
+                    analysis_version=analysis_version  # NEW: Also save to history
                 )
                 
                 skills_saved += 1
-                logger.info(f"✓ Saved: {competence_name} ({skill_category}) = {adjusted_percent:.1f}% [usage: {usage_freq}]")
+                logger.info(f"✓ Saved: {competence_name} ({skill_category}) = {adjusted_percent:.1f}% [usage: {usage_freq}] (v{analysis_version})")
                 
             except Exception as skill_error:
                 error_msg = f"{skill.get('name', 'Unknown')}: {str(skill_error)}"
                 skills_failed.append(error_msg)
                 logger.warning(f"✗ Failed to save skill: {error_msg}")
                 continue
-        
-        # Save full analysis to archive
-        analysis_version = db_repo.save_analysis(
-            user_id=user_id,
-            analysis_data=analysis_result
-        )
         
         result = {
             "status": "success",
@@ -622,8 +632,9 @@ async def save_analysis_to_database(
             "skills_saved": skills_saved,
             "total_skills_found": len(all_skills),
             "github_username": github_username,
-            "message": f"✓ Analysis saved: {skills_saved}/{len(all_skills)} skills stored in database",
-            "timestamp": datetime.now().isoformat()
+            "message": f"✓ Analysis saved: {skills_saved}/{len(all_skills)} skills stored (current + history v{analysis_version})",
+            "timestamp": datetime.now().isoformat(),
+            "architecture": "normalized_with_versioning"
         }
         
         if skills_failed:
@@ -647,13 +658,14 @@ async def get_previous_analysis(
     github_username: str
 ) -> Dict[str, Any]:
     """
-    Retrieve previous analysis versions from the database.
+    Retrieve previous analysis versions from the database (normalized structure).
+    Returns metadata + competence history for each version.
     
     Args:
         github_username: GitHub username
         
     Returns:
-        All stored analysis versions for the user
+        All stored analysis versions with competences for the user
     """
     try:
         from db.repository import DatabaseRepository
@@ -669,8 +681,24 @@ async def get_previous_analysis(
                 "timestamp": datetime.now().isoformat()
             }
         
-        # Get all analyses
-        analyses = db_repo.get_all_analyses(user['id'])
+        # Get all analysis metadata
+        analyses_metadata = db_repo.get_all_analyses(user['id'])
+        
+        # For each version, get the competences
+        analyses_with_competences = []
+        for analysis in analyses_metadata:
+            version = analysis['version_number']
+            competences = db_repo.get_competences_for_version(user['id'], version)
+            
+            analyses_with_competences.append({
+                "version": version,
+                "analysis_date": analysis['analysis_date'],
+                "total_repositories": analysis['total_repositories'],
+                "data_source": analysis['data_source'],
+                "metadata": analysis['metadata'],
+                "competences": competences,
+                "total_competences": len(competences)
+            })
         
         return {
             "status": "success",
@@ -678,9 +706,9 @@ async def get_previous_analysis(
                 "id": user['id'],
                 "github_username": user['github_username']
             },
-            "total_versions": len(analyses),
-            "analyses": analyses,
-            "message": f"Found {len(analyses)} analysis version(s)",
+            "total_versions": len(analyses_with_competences),
+            "analyses": analyses_with_competences,
+            "message": f"Found {len(analyses_with_competences)} analysis version(s)",
             "timestamp": datetime.now().isoformat()
         }
         

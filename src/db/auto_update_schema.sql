@@ -1,6 +1,9 @@
 -- Automatic Update Schema Extensions
 -- Adds automatic update tracking to existing schema
 
+-- Drop existing function if it exists (to avoid parameter name conflicts)
+DROP FUNCTION IF EXISTS get_users_for_update(integer) CASCADE;
+
 -- Add column to track last analysis time
 ALTER TABLE users 
 ADD COLUMN IF NOT EXISTS last_analyzed_at TIMESTAMP;
