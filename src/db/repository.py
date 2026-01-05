@@ -350,7 +350,8 @@ class DatabaseRepository:
     def deactivate_user(
         self,
         github_username: Optional[str] = None,
-        jira_email: Optional[str] = None
+        jira_email: Optional[str] = None,
+        performed_by: Optional[str] = None
     ) -> bool:
         """
         Deactivate a user (soft delete).
@@ -358,6 +359,7 @@ class DatabaseRepository:
         Args:
             github_username: GitHub username
             jira_email: Jira email address
+            performed_by: Administrator who performed the action
             
         Returns:
             True if user was deactivated, False otherwise
@@ -381,16 +383,26 @@ class DatabaseRepository:
                 UPDATE users 
                 SET is_active = FALSE, 
                     deactivated_at = CURRENT_TIMESTAMP,
+                    deactivated_by = %s,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE {' OR '.join(conditions)}
                 AND is_active = TRUE
                 RETURNING id, github_username, full_name
             """
+            params.append(performed_by)
             results = self.db.execute_query(query, tuple(params))
             
             if results:
                 user = results[0]
-                logger.info(f"Deactivated user: {user['github_username']} (ID: {user['id']})")
+                
+                # Log to audit table
+                audit_query = """
+                    INSERT INTO user_audit_log (user_id, action, performed_by)
+                    VALUES (%s, 'deactivate', %s)
+                """
+                self.db.execute_query(audit_query, (user['id'], performed_by), fetch=False)
+                
+                logger.info(f"Deactivated user: {user['github_username']} (ID: {user['id']}) by {performed_by}")
                 return True
             
             logger.warning(f"No active user found to deactivate with given identifiers")
@@ -403,7 +415,8 @@ class DatabaseRepository:
     def reactivate_user(
         self,
         github_username: Optional[str] = None,
-        jira_email: Optional[str] = None
+        jira_email: Optional[str] = None,
+        performed_by: Optional[str] = None
     ) -> bool:
         """
         Reactivate a previously deactivated user.
@@ -411,6 +424,7 @@ class DatabaseRepository:
         Args:
             github_username: GitHub username
             jira_email: Jira email address
+            performed_by: Administrator who performed the action
             
         Returns:
             True if user was reactivated, False otherwise
@@ -443,7 +457,15 @@ class DatabaseRepository:
             
             if results:
                 user = results[0]
-                logger.info(f"Reactivated user: {user['github_username']} (ID: {user['id']})")
+                
+                # Log to audit table
+                audit_query = """
+                    INSERT INTO user_audit_log (user_id, action, performed_by)
+                    VALUES (%s, 'reactivate', %s)
+                """
+                self.db.execute_query(audit_query, (user['id'], performed_by), fetch=False)
+                
+                logger.info(f"Reactivated user: {user['github_username']} (ID: {user['id']}) by {performed_by}")
                 return True
             
             logger.warning(f"No inactive user found to reactivate with given identifiers")
@@ -482,10 +504,223 @@ class DatabaseRepository:
             logger.error(f"Error getting inactive users: {e}")
             raise
     
+    def remove_developer(
+        self,
+        github_username: Optional[str] = None,
+        jira_email: Optional[str] = None,
+        performed_by: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Remove (deactivate) a developer who no longer works at the company.
+        Business logic for soft delete with validation and user lookup.
+        
+        Args:
+            github_username: GitHub username of the developer to remove
+            jira_email: Jira email of the developer to remove
+            performed_by: Administrator who performed the action
+            
+        Returns:
+            Dictionary with status and developer details
+        """
+        try:
+            if not github_username and not jira_email:
+                return {
+                    "success": False,
+                    "status": "error",
+                    "error": "Either github_username or jira_email must be provided"
+                }
+            
+            if not performed_by:
+                return {
+                    "success": False,
+                    "status": "error",
+                    "error": "performed_by parameter is required (admin identifier)"
+                }
+            
+            # Check if user exists and is active
+            user = self.get_user_by_identifier(github_username, jira_email, include_inactive=False)
+            if not user:
+                return {
+                    "success": False,
+                    "status": "not_found",
+                    "message": "No active developer found with the provided identifier",
+                    "github_username": github_username,
+                    "jira_email": jira_email
+                }
+            
+            # Deactivate the user
+            success = self.deactivate_user(github_username, jira_email, performed_by)
+            
+            if success:
+                return {
+                    "success": True,
+                    "status": "success",
+                    "message": f"Developer '{user['github_username'] or user['jira_email']}' has been removed",
+                    "developer": {
+                        "github_username": user.get('github_username'),
+                        "full_name": user.get('full_name'),
+                        "display_name": user.get('display_name')
+                    },
+                    "note": "This is a soft delete. Data is retained and user can be reactivated if needed."
+                }
+            else:
+                return {
+                    "success": False,
+                    "status": "error",
+                    "error": "Failed to deactivate user"
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in remove_developer: {e}")
+            return {
+                "success": False,
+                "status": "error",
+                "error": str(e)
+            }
+    
+    def reactivate_developer(
+        self,
+        github_username: Optional[str] = None,
+        jira_email: Optional[str] = None,
+        performed_by: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Reactivate a previously removed developer.
+        Business logic for reactivation with validation.
+        
+        Args:
+            github_username: GitHub username of the developer to reactivate
+            jira_email: Jira email of the developer to reactivate
+            performed_by: Administrator who performed the action
+            
+        Returns:
+            Dictionary with status and reactivation details
+        """
+        try:
+            if not github_username and not jira_email:
+                return {
+                    "success": False,
+                    "status": "error",
+                    "error": "Either github_username or jira_email must be provided"
+                }
+            
+            if not performed_by:
+                return {
+                    "success": False,
+                    "status": "error",
+                    "error": "performed_by parameter is required (admin identifier)"
+                }
+            
+            success = self.reactivate_user(github_username, jira_email, performed_by)
+            
+            if success:
+                return {
+                    "success": True,
+                    "status": "success",
+                    "message": "Developer has been reactivated",
+                    "github_username": github_username,
+                    "jira_email": jira_email
+                }
+            else:
+                return {
+                    "success": False,
+                    "status": "not_found",
+                    "error": "No inactive user found with the provided identifier"
+                }
+                
+        except Exception as e:
+            logger.error(f"Error in reactivate_developer: {e}")
+            return {
+                "success": False,
+                "status": "error",
+                "error": str(e)
+            }
+    
+    def get_audit_log(
+        self,
+        user_id: Optional[int] = None,
+        action: Optional[str] = None,
+        limit: int = 100
+    ) -> Dict[str, Any]:
+        """
+        Get audit log entries for administrative actions.
+        
+        Args:
+            user_id: Optional filter by user ID
+            action: Optional filter by action type
+            limit: Maximum number of entries to return
+            
+        Returns:
+            Dictionary with audit log entries and metadata
+        """
+        try:
+            conditions = []
+            params = []
+            
+            if user_id is not None:
+                conditions.append("user_id = %s")
+                params.append(user_id)
+            
+            if action is not None:
+                conditions.append("action = %s")
+                params.append(action)
+            
+            where_clause = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+            
+            query = f"""
+                SELECT 
+                    al.id,
+                    al.user_id,
+                    u.github_username,
+                    u.full_name,
+                    al.action,
+                    al.performed_by,
+                    al.performed_at,
+                    al.reason,
+                    al.additional_data
+                FROM user_audit_log al
+                LEFT JOIN users u ON al.user_id = u.id
+                {where_clause}
+                ORDER BY al.performed_at DESC
+                LIMIT %s
+            """
+            params.append(limit)
+            
+            results = self.db.execute_query(query, tuple(params))
+            
+            audit_entries = []
+            for row in results:
+                audit_entries.append({
+                    'id': row['id'],
+                    'user_id': row['user_id'],
+                    'github_username': row['github_username'],
+                    'full_name': row['full_name'],
+                    'action': row['action'],
+                    'performed_by': row['performed_by'],
+                    'performed_at': row['performed_at'].isoformat() if row['performed_at'] else None,
+                    'reason': row['reason'],
+                    'additional_data': row['additional_data']
+                })
+            
+            return {
+                "status": "success",
+                "total_entries": len(audit_entries),
+                "audit_log": audit_entries
+            }
+            
+        except Exception as e:
+            logger.error(f"Error getting audit log: {e}")
+            return {
+                "status": "error",
+                "error": str(e),
+                "audit_log": []
+            }
+    
     def delete_user_permanently(
         self,
         github_username: Optional[str] = None,
-        jira_email: Optional[str] = None
+        jira_email: Optional[str] = None,
+        confirm: bool = False
     ) -> Dict[str, Any]:
         """
         Permanently delete a user and all their data from the database.
@@ -494,11 +729,27 @@ class DatabaseRepository:
         Args:
             github_username: GitHub username
             jira_email: Jira email address
+            confirm: Must be True to proceed (safety check)
             
         Returns:
             Dictionary with deletion details
         """
         try:
+            # Validation: confirm must be True
+            if not confirm:
+                return {
+                    "status": "error",
+                    "error": "Confirmation required. Set confirm=True to proceed with permanent deletion.",
+                    "warning": "⚠️ This will permanently delete ALL data for this developer. This action cannot be undone!"
+                }
+            
+            # Validation: at least one identifier required
+            if not github_username and not jira_email:
+                return {
+                    "status": "error",
+                    "error": "Either github_username or jira_email must be provided"
+                }
+            
             conditions = []
             params = []
             
@@ -510,19 +761,13 @@ class DatabaseRepository:
                 conditions.append("jira_email = %s")
                 params.append(jira_email)
             
-            if not conditions:
-                return {
-                    "success": False,
-                    "error": "No identifier provided"
-                }
-            
             # First, get user details for logging
             query = f"SELECT * FROM users WHERE {' OR '.join(conditions)} LIMIT 1"
             user_results = self.db.execute_query(query, tuple(params))
             
             if not user_results:
                 return {
-                    "success": False,
+                    "status": "error",
                     "error": "User not found"
                 }
             
@@ -537,15 +782,24 @@ class DatabaseRepository:
                 deleted_user = delete_results[0]
                 logger.warning(f"PERMANENTLY DELETED user: {deleted_user['github_username']} (ID: {deleted_user['id']})")
                 return {
-                    "success": True,
-                    "user_id": user_id,
-                    "github_username": user.get('github_username'),
-                    "full_name": user.get('full_name'),
-                    "message": "User and all associated data permanently deleted"
+                    "status": "success",
+                    "message": "Developer permanently deleted (GDPR compliance)",
+                    "developer": {
+                        "github_username": user.get('github_username'),
+                        "full_name": user.get('full_name'),
+                        "user_id": user_id
+                    },
+                    "deleted_data": [
+                        "User profile",
+                        "All competence records",
+                        "All analysis history",
+                        "All associated timestamps"
+                    ],
+                    "warning": "This action cannot be undone"
                 }
             else:
                 return {
-                    "success": False,
+                    "status": "error",
                     "error": "Failed to delete user"
                 }
             

@@ -278,6 +278,48 @@ async def export_developer_profile(
         }
 
 
+
+
+@mcp.tool()
+async def get_developer_languages(
+    username: str
+) -> Dict[str, Any]:
+    """
+    Get all programming languages from a developer's profile organized by categories.
+    Shows language distribution across categories and identifies top programming languages.
+    
+    Args:
+        username: GitHub username to get language information for
+    
+    Returns:
+        Dictionary containing:
+        - Categorized languages (Programming Languages, Web Frontend, Backend/Server, etc.)
+        - Top 3 programming languages by usage (lines of code)
+        - Total number of languages and repositories
+    """
+    try:
+        config = Config()
+        github_service = GitHubService()
+        analyzer = GitHubAnalyzer(github_service)
+        
+        logger.info(f"Getting language information for user: {username}")
+        
+        # Call analyzer to get languages by category
+        result = analyzer.get_languages_by_category(username)
+        
+        # Add timestamp
+        result["analysis_date"] = datetime.now().isoformat()
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting languages for {username}: {str(e)}")
+        return {
+            "error": f"Failed to get language information: {str(e)}",
+            "username": username
+        }
+
+
 @mcp.tool()
 async def get_all_employees(
     source: str = "github",
@@ -607,15 +649,19 @@ async def get_previous_analysis(
 @mcp.tool()
 async def remove_developer(
     github_username: Optional[str] = None,
-    jira_email: Optional[str] = None
+    jira_email: Optional[str] = None,
+    performed_by: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Remove (deactivate) a developer who no longer works at the company.
     This is a soft delete - the user's data is retained but they won't appear in searches.
     
+    ⚠️ Admin only: This action requires administrator privileges.
+    
     Args:
         github_username: GitHub username of the developer to remove
         jira_email: Jira email of the developer to remove
+        performed_by: GitHub username or email of the administrator performing this action
         
     Returns:
         Confirmation of removal with developer details
@@ -623,47 +669,10 @@ async def remove_developer(
     try:
         from db.repository import DatabaseRepository
         
-        if not github_username and not jira_email:
-            return {
-                "status": "error",
-                "error": "Either github_username or jira_email must be provided",
-                "timestamp": datetime.now().isoformat()
-            }
-        
         db_repo = DatabaseRepository()
-        
-        # Check if user exists and is active
-        user = db_repo.get_user_by_identifier(github_username, jira_email, include_inactive=False)
-        if not user:
-            return {
-                "status": "not_found",
-                "message": "No active developer found with the provided identifier",
-                "github_username": github_username,
-                "jira_email": jira_email,
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        # Deactivate the user
-        success = db_repo.deactivate_user(github_username, jira_email)
-        
-        if success:
-            return {
-                "status": "success",
-                "message": f"Developer '{user['github_username'] or user['jira_email']}' has been removed",
-                "developer": {
-                    "github_username": user.get('github_username'),
-                    "full_name": user.get('full_name'),
-                    "display_name": user.get('display_name')
-                },
-                "note": "This is a soft delete. Data is retained and user can be reactivated if needed.",
-                "timestamp": datetime.now().isoformat()
-            }
-        else:
-            return {
-                "status": "error",
-                "error": "Failed to deactivate user",
-                "timestamp": datetime.now().isoformat()
-            }
+        result = db_repo.remove_developer(github_username, jira_email, performed_by)
+        result["timestamp"] = datetime.now().isoformat()
+        return result
         
     except Exception as e:
         logger.error(f"Error removing developer: {e}")
@@ -677,14 +686,18 @@ async def remove_developer(
 @mcp.tool()
 async def reactivate_developer(
     github_username: Optional[str] = None,
-    jira_email: Optional[str] = None
+    jira_email: Optional[str] = None,
+    performed_by: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Reactivate a previously removed developer.
     
+    ⚠️ Admin only: This action requires administrator privileges.
+    
     Args:
         github_username: GitHub username of the developer to reactivate
         jira_email: Jira email of the developer to reactivate
+        performed_by: GitHub username or email of the administrator performing this action
         
     Returns:
         Confirmation of reactivation
@@ -692,33 +705,49 @@ async def reactivate_developer(
     try:
         from db.repository import DatabaseRepository
         
-        if not github_username and not jira_email:
-            return {
-                "status": "error",
-                "error": "Either github_username or jira_email must be provided",
-                "timestamp": datetime.now().isoformat()
-            }
-        
         db_repo = DatabaseRepository()
-        success = db_repo.reactivate_user(github_username, jira_email)
-        
-        if success:
-            return {
-                "status": "success",
-                "message": f"Developer has been reactivated",
-                "github_username": github_username,
-                "jira_email": jira_email,
-                "timestamp": datetime.now().isoformat()
-            }
-        else:
-            return {
-                "status": "not_found",
-                "message": "No inactive developer found with the provided identifier",
-                "timestamp": datetime.now().isoformat()
-            }
+        result = db_repo.reactivate_developer(github_username, jira_email, performed_by)
+        result["timestamp"] = datetime.now().isoformat()
+        return result
         
     except Exception as e:
         logger.error(f"Error reactivating developer: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def get_admin_audit_log(
+    user_id: Optional[int] = None,
+    action: Optional[str] = None,
+    limit: int = 50
+) -> Dict[str, Any]:
+    """
+    Get audit log of administrative actions (deactivations, reactivations, deletions).
+    
+    ⚠️ Admin only: This action requires administrator privileges.
+    
+    Args:
+        user_id: Optional filter by user ID
+        action: Optional filter by action type ('deactivate', 'reactivate', 'delete_permanently')
+        limit: Maximum number of entries to return (default 50)
+        
+    Returns:
+        List of audit log entries with timestamps and admin identifiers
+    """
+    try:
+        from db.repository import DatabaseRepository
+        
+        db_repo = DatabaseRepository()
+        result = db_repo.get_audit_log(user_id, action, limit)
+        result["timestamp"] = datetime.now().isoformat()
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting audit log: {e}")
         return {
             "status": "error",
             "error": str(e),
@@ -1007,7 +1036,7 @@ async def permanently_delete_developer(
     PERMANENTLY DELETE a developer and ALL their data (GDPR "right to be forgotten").
     This is irreversible! All analyses, competences, and history will be removed.
     
-    ⚠️ WARNING: This is a hard delete. Data cannot be recovered!
+    WARNING: This is a hard delete. Data cannot be recovered!
     
     Args:
         github_username: GitHub username of the developer to delete
@@ -1020,48 +1049,10 @@ async def permanently_delete_developer(
     try:
         from db.repository import DatabaseRepository
         
-        if not confirm:
-            return {
-                "status": "error",
-                "error": "Confirmation required. Set confirm=True to proceed with permanent deletion.",
-                "warning": "⚠️ This will permanently delete ALL data for this developer. This action cannot be undone!",
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        if not github_username and not jira_email:
-            return {
-                "status": "error",
-                "error": "Either github_username or jira_email must be provided",
-                "timestamp": datetime.now().isoformat()
-            }
-        
         db_repo = DatabaseRepository()
-        result = db_repo.delete_user_permanently(github_username, jira_email)
-        
-        if result.get("success"):
-            return {
-                "status": "success",
-                "message": "Developer permanently deleted (GDPR compliance)",
-                "developer": {
-                    "github_username": result.get('github_username'),
-                    "full_name": result.get('full_name'),
-                    "user_id": result.get('user_id')
-                },
-                "deleted_data": [
-                    "User profile",
-                    "All competence records",
-                    "All analysis history",
-                    "All associated timestamps"
-                ],
-                "warning": "This action cannot be undone",
-                "timestamp": datetime.now().isoformat()
-            }
-        else:
-            return {
-                "status": "error",
-                "error": result.get("error"),
-                "timestamp": datetime.now().isoformat()
-            }
+        result = db_repo.delete_user_permanently(github_username, jira_email, confirm)
+        result["timestamp"] = datetime.now().isoformat()
+        return result
         
     except Exception as e:
         logger.error(f"Error permanently deleting developer: {e}")
