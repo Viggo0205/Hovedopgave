@@ -77,86 +77,29 @@ class GitHubService:
             cls._failure_count = 0
             logger.debug("GitHub service failure count reset after successful request")
     
-    async def _api_call_with_retry(self, func, *args, max_retries=3, **kwargs):
-        """
-        Execute API call with exponential backoff retry logic.
-        
-        Args:
-            func: The API function to call
-            max_retries: Maximum number of retry attempts
-            
-        Returns:
-            Result of the API call
-            
-        Raises:
-            GitHubServiceDegradedException: If service is degraded
-            Exception: If all retries exhausted
-        """
-        # Check degraded state first
+    async def _call_api(self, func, *args, **kwargs):
         if self.is_degraded():
-            raise GitHubServiceDegradedException(
-                f"GitHub integration is degraded until {time.ctime(self._degraded_until)}"
-            )
+            raise GitHubServiceDegradedException("Service temporarily unavailable")
         
-        # Apply rate limiting
         async with self.throttler:
-            for attempt in range(max_retries):
+            for i in range(3):
                 try:
-                    # Execute the API call
                     result = func(*args, **kwargs)
-                    
-                    # Success - reset failure counter
                     self.reset_failures()
                     return result
-                    
-                except RateLimitExceededException as e:
-                    # HTTP 429 - Rate limit exceeded
-                    retry_after = getattr(e, 'retry_after', None)
-                    wait_time = retry_after if retry_after else (2 ** attempt) * 5
-                    
-                    logger.warning(
-                        f"Rate limit exceeded (attempt {attempt + 1}/{max_retries}). "
-                        f"Waiting {wait_time}s before retry..."
-                    )
-                    
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(wait_time)
+                except RateLimitExceededException:
+                    if i < 2:
+                        await asyncio.sleep((2 ** i) * 5)
                     else:
                         self.increment_failure()
                         raise
-                        
-                except GithubException as e:
-                    # Other GitHub API errors
-                    if e.status == 429:
-                        # Alternative way 429 might be reported
-                        wait_time = (2 ** attempt) * 5
-                        logger.warning(
-                            f"HTTP 429 detected (attempt {attempt + 1}/{max_retries}). "
-                            f"Backing off for {wait_time}s..."
-                        )
-                        if attempt < max_retries - 1:
-                            await asyncio.sleep(wait_time)
-                        else:
-                            self.increment_failure()
-                            raise
-                    else:
-                        # Non-rate-limit error, don't retry
-                        logger.error(f"GitHub API error: {e}")
-                        self.increment_failure()
-                        raise
-                        
-                except Exception as e:
-                    # Unexpected errors
-                    logger.error(f"Unexpected error in GitHub API call: {e}")
+                except Exception:
                     self.increment_failure()
                     raise
-        
-        # Should not reach here
-        raise Exception("API call failed after all retries")
     
     async def get_user_profile(self, username: str) -> Dict[str, Any]:
         """Get raw user profile data from GitHub with rate limiting."""
-        user = await self._api_call_with_retry(self.github.get_user, username)
+        user = await self._call_api(self.github.get_user, username)
         profile = {
             "username": user.login,
             "name": user.name,
@@ -168,15 +111,15 @@ class GitHubService:
     
     async def get_user_repositories(self, username: str, limit: int = 50) -> list:
         """Get raw repository data for a user with rate limiting."""
-        user = await self._api_call_with_retry(self.github.get_user, username)
+        user = await self._call_api(self.github.get_user, username)
         repos = []
         
         # Get repos with rate limiting
-        all_repos = await self._api_call_with_retry(lambda: list(user.get_repos(type='public'))[:limit])
+        all_repos = await self._call_api(lambda: list(user.get_repos(type='public'))[:limit])
         
         for repo in all_repos:
             # Each repo.get_languages() is an API call, so rate limit it too
-            languages = await self._api_call_with_retry(repo.get_languages)
+            languages = await self._call_api(repo.get_languages)
             repo_data = {
                 "name": repo.name,
                 "language": repo.language,
@@ -209,10 +152,10 @@ class GitHubService:
     async def get_organization_members(self, org_name: str) -> list:
         """Get all public members of an organization with rate limiting."""
         try:
-            org = await self._api_call_with_retry(self.github.get_organization, org_name)
+            org = await self._call_api(self.github.get_organization, org_name)
             members = []
             
-            all_members = await self._api_call_with_retry(lambda: list(org.get_members()))
+            all_members = await self._call_api(lambda: list(org.get_members()))
             
             for member in all_members:
                 member_data = {
@@ -238,13 +181,13 @@ class GitHubService:
     async def get_organization_repositories(self, org_name: str, limit: int = 50) -> list:
         """Get repositories from an organization with rate limiting."""
         try:
-            org = await self._api_call_with_retry(self.github.get_organization, org_name)
+            org = await self._call_api(self.github.get_organization, org_name)
             repos = []
             
-            all_repos = await self._api_call_with_retry(lambda: list(org.get_repos())[:limit])
+            all_repos = await self._call_api(lambda: list(org.get_repos())[:limit])
             
             for repo in all_repos:
-                languages = await self._api_call_with_retry(repo.get_languages)
+                languages = await self._call_api(repo.get_languages)
                 repo_data = {
                     "name": repo.name,
                     "full_name": repo.full_name,
@@ -268,10 +211,10 @@ class GitHubService:
     async def get_repository_contributors(self, repo_owner: str, repo_name: str) -> list:
         """Get contributors for a specific repository with rate limiting."""
         try:
-            repo = await self._api_call_with_retry(self.github.get_repo, f"{repo_owner}/{repo_name}")
+            repo = await self._call_api(self.github.get_repo, f"{repo_owner}/{repo_name}")
             contributors = []
             
-            all_contributors = await self._api_call_with_retry(lambda: list(repo.get_contributors()))
+            all_contributors = await self._call_api(lambda: list(repo.get_contributors()))
             
             for contributor in all_contributors:
                 contributor_data = {

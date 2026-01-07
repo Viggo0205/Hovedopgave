@@ -41,7 +41,9 @@ class GitHubAnalyzer:
             return {
                 "username": username,
                 "profile": profile,
+                "repositories": repositories,  # Include repositories for metadata storage
                 "language_skills": language_stats,
+                "language_stats": language_stats,  # Alias for compatibility
                 "expertise_areas": expertise_areas,
                 "total_repositories": len(repositories)
             }
