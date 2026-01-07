@@ -11,8 +11,10 @@ from typing import List, Dict, Any
 import sys
 import os
 
-# Add src to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
+# Add project root and src to path
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+sys.path.insert(0, project_root)
+sys.path.insert(0, os.path.join(project_root, 'src'))
 
 from config import Config
 from db.repository import DatabaseRepository
@@ -41,28 +43,50 @@ async def analyze_and_save_github(db_repo, skill_processor, github_analyzer, use
         
         analysis_result = await github_analyzer.analyze_developer(github_username)
         
-        skill_assessment = {
-            "language_skills": analysis_result.get("language_skills", {}),
-            "expertise_areas": analysis_result.get("expertise_areas", {})
+        # Use skill_processor to properly extract skills from GitHub data
+        skill_assessment = skill_processor.process_github_data(analysis_result)
+        
+        # Extract metadata only (no competences in JSONB)
+        metadata = {
+            "profile": analysis_result.get("profile", {}),
+            "repositories": analysis_result.get("repositories", []),
+            "language_stats": analysis_result.get("language_stats", {}),
+            "activity_metrics": analysis_result.get("activity_metrics", {})
         }
         
-        combined = skill_processor.combine_assessments({"github": skill_assessment})
+        # Save analysis first to get version number
+        total_repos = len(analysis_result.get("repositories", []))
+        analysis_version = db_repo.save_analysis(
+            user_id=user_id,
+            metadata=metadata,
+            total_repositories=total_repos,
+            data_source="github"
+        )
         
-        for skill_name, skill_data in combined.get("skills", {}).items():
-            proficiency = skill_data.get("proficiency_percent", 0)
-            db_repo.update_user_competence(
-                user_id=user_id,
-                competence_name=skill_name,
-                procent=proficiency
-            )
+        # Extract skills from assessment and save with version number
+        skills_saved = 0
+        for skill_list_key in ["technical_skills", "soft_skills", "domain_skills"]:
+            for skill_data in skill_assessment.get(skill_list_key, []):
+                skill_name = skill_data.get("name")
+                skill_level = skill_data.get("level", "intermediate")  # lowercase: expert, advanced, intermediate, beginner
+                
+                # Convert skill level to percentage
+                level_map = {"expert": 100, "advanced": 75, "intermediate": 50, "beginner": 25}
+                proficiency = level_map.get(skill_level.lower(), 50)
+                
+                db_repo.update_user_competence(
+                    user_id=user_id,
+                    competence_name=skill_name,
+                    procent=proficiency,
+                    analysis_version=analysis_version
+                )
+                skills_saved += 1
         
-        version = db_repo.save_analysis(user_id=user_id, analysis_data=analysis_result)
-        skills_count = len(combined.get("skills", {}))
-        logger.info(f"✓ {github_username}: v{version}, {skills_count} skills")
+        logger.info(f"{github_username}: v{analysis_version}, {skills_saved} skills")
         return True
         
     except Exception as e:
-        logger.error(f"✗ Error analyzing {github_username}: {e}")
+        logger.error(f"Error analyzing {github_username}: {e}")
         return False
 
 
@@ -73,28 +97,49 @@ async def analyze_and_save_jira(db_repo, skill_processor, jira_analyzer, user_id
         
         analysis_result = await jira_analyzer.analyze_developer(jira_email)
         
-        skill_assessment = {
-            "language_skills": analysis_result.get("language_skills", {}),
-            "expertise_areas": analysis_result.get("expertise_areas", {})
+        # Use skill_processor to properly extract skills from Jira data
+        skill_assessment = skill_processor.process_jira_data(analysis_result)
+        
+        # Extract metadata only (no competences in JSONB)
+        metadata = {
+            "issues": analysis_result.get("issues", []),
+            "project_involvement": analysis_result.get("project_involvement", {}),
+            "activity_metrics": analysis_result.get("activity_metrics", {})
         }
         
-        combined = skill_processor.combine_assessments({"jira": skill_assessment})
+        # Save analysis first to get version number
+        total_issues = len(analysis_result.get("issues", []))
+        analysis_version = db_repo.save_analysis(
+            user_id=user_id,
+            metadata=metadata,
+            total_repositories=total_issues,  # Using for total issues count
+            data_source="jira"
+        )
         
-        for skill_name, skill_data in combined.get("skills", {}).items():
-            proficiency = skill_data.get("proficiency_percent", 0)
-            db_repo.update_user_competence(
-                user_id=user_id,
-                competence_name=skill_name,
-                procent=proficiency
-            )
+        # Extract skills from assessment and save with version number
+        skills_saved = 0
+        for skill_list_key in ["technical_skills", "soft_skills", "domain_skills"]:
+            for skill_data in skill_assessment.get(skill_list_key, []):
+                skill_name = skill_data.get("name")
+                skill_level = skill_data.get("level", "intermediate")  # lowercase: expert, advanced, intermediate, beginner
+                
+                # Convert skill level to percentage
+                level_map = {"expert": 100, "advanced": 75, "intermediate": 50, "beginner": 25}
+                proficiency = level_map.get(skill_level.lower(), 50)
+                
+                db_repo.update_user_competence(
+                    user_id=user_id,
+                    competence_name=skill_name,
+                    procent=proficiency,
+                    analysis_version=analysis_version
+                )
+                skills_saved += 1
         
-        version = db_repo.save_analysis(user_id=user_id, analysis_data=analysis_result)
-        skills_count = len(combined.get("skills", {}))
-        logger.info(f"✓ {jira_email}: v{version}, {skills_count} skills")
+        logger.info(f"{jira_email}: v{analysis_version}, {skills_saved} skills")
         return True
         
     except Exception as e:
-        logger.error(f"✗ Error analyzing {jira_email}: {e}")
+        logger.error(f"Error analyzing {jira_email}: {e}")
         return False
 
 
@@ -115,21 +160,30 @@ async def main():
     try:
         github_service = GitHubService()
         github_analyzer = GitHubAnalyzer(github_service)
-        logger.info("✓ GitHub service ready")
+        logger.info("GitHub service ready")
     except Exception as e:
         logger.warning(f"GitHub not available: {e}")
     
     try:
         jira_service = JiraService()
         jira_analyzer = JiraAnalyzer(jira_service)
-        logger.info("✓ Jira service ready")
+        logger.info("Jira service ready")
     except Exception as e:
         logger.warning(f"Jira not available: {e}")
     
-    # Get users needing update
+    # Get all users with auto_update enabled
     try:
-        query = "SELECT * FROM get_users_for_update(5)"
-        users = db_repo.db.execute_query(query, (5,))
+        query = """
+            SELECT 
+                id as user_id,
+                github_username,
+                jira_email,
+                last_analyzed_at
+            FROM users
+            WHERE auto_update_enabled = TRUE
+              AND (github_username IS NOT NULL OR jira_email IS NOT NULL)
+        """
+        users = db_repo.db.execute_query(query)
         users = [dict(row) for row in users]
     except Exception as e:
         logger.error(f"Error getting users: {e}")
