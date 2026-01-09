@@ -37,6 +37,8 @@ CREATE TABLE users (
     role_id INT,
     is_active BOOLEAN DEFAULT TRUE,
     deactivated_at TIMESTAMP,
+    last_analyzed_at TIMESTAMP,
+    auto_update_enabled BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT fk_role FOREIGN KEY (role_id) REFERENCES role(id) ON DELETE SET NULL

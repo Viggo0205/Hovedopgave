@@ -16,8 +16,8 @@ This is an MCP server that figures out what developers are good at by looking at
 ## 📚 Documentation
 
 ### Getting Started
-- **[Complete Setup Guide](docs/COMPLETE_SETUP_GUIDE.md)** - ⭐ **START HERE!** Everything you need to get running
-- [Quick Start](#quick-start) - Skip the handholding if you've done this before
+- **[Setup Guide](docs/SETUP_GUIDE.md)** - ⭐ **START HERE!** Step-by-step setup instructions
+- [Quick Start](#quick-start) - Skip the details if you know what you're doing
 
 ### Technical Docs
 - **[API Reference](docs/USER_STORY_DATAANALYST_IMPLEMENTATION.md)** - Available MCP tools and how to use them
@@ -41,7 +41,7 @@ This is an MCP server that figures out what developers are good at by looking at
 ```
 Hovedopgave/
 ├── docs/                          # 📚 Documentation
-│   └── COMPLETE_SETUP_GUIDE.md   # ⭐ Main setup guide
+│   └── (moved to root)
 │
 ├── src/                           # 🐍 Python source code
 │   ├── analyzers/                # Analysis engines
@@ -77,7 +77,7 @@ Hovedopgave/
 
 ## ⚡ Quick Start
 
-> **First time here?** Check out the [Complete Setup Guide](docs/COMPLETE_SETUP_GUIDE.md) for step-by-step instructions
+> **First time here?** Check out the [Setup Guide](docs/SETUP_GUIDE.md) for step-by-step instructions
 
 ### What You'll Need
 - PostgreSQL 18.1 or newer
@@ -95,7 +95,7 @@ cd Hovedopgave
 uv sync
 
 # 3. Create .env file with your credentials
-# See SETUP_GUIDE.md for details on getting GitHub token
+# See docs/SETUP_GUIDE.md for details on getting GitHub token
 
 # 4. Setup database
 python setup_database_complete.py
@@ -104,7 +104,7 @@ python setup_database_complete.py
 pytest tests/ -v
 ```
 
-For detailed step-by-step instructions, see [SETUP_GUIDE.md](SETUP_GUIDE.md)
+For detailed step-by-step instructions, see [SETUP_GUIDE.md](docs/SETUP_GUIDE.md)
 
 ### Using It with Claude Desktop
 
@@ -116,7 +116,7 @@ python scripts/utilities/setup_claude_desktop.py
 # "Analyze developer username123 from GitHub"
 ```
 
-For full setup instructions, see [SETUP_GUIDE.md](SETUP_GUIDE.md)
+For full setup instructions, see [SETUP_GUIDE.md](docs/SETUP_GUIDE.md)
 
 ## 🔧 What This Thing Can Do
 
@@ -184,7 +184,7 @@ psql -U postgres -d developer_skills -f src\db\auto_update_schema.sql
 psql -U postgres -d developer_skills -c "SELECT * FROM v_update_status;"
 ```
 
-Need more details? The [Complete Setup Guide](docs/COMPLETE_SETUP_GUIDE.md#automatic-updates-optional) has you covered.
+Need more details? The [Setup Guide](docs/SETUP_GUIDE.md) has you covered.
 
 ## 📊 How It Works in Practice
 
@@ -282,7 +282,7 @@ psql -U postgres -c "DROP DATABASE IF EXISTS developer_skills_test;"
 pytest tests/ -v
 ```
 
-Still stuck? Check the [Complete Setup Guide - Troubleshooting](docs/COMPLETE_SETUP_GUIDE.md#troubleshooting) section.
+Still stuck? Check the [Setup Guide - Troubleshooting](docs/SETUP_GUIDE.md#troubleshooting) section.
 
 ### Database connection issues
 ```powershell
@@ -302,12 +302,12 @@ cat $env:APPDATA\Claude\claude_desktop_config.json
 python scripts/utilities/setup_claude_desktop.py
 ```
 
-See [SETUP_GUIDE.md](SETUP_GUIDE.md) for more solutions.
+See [SETUP_GUIDE.md](docs/SETUP_GUIDE.md) for more solutions.
 
 ## 📞 Support
 
 For detailed setup instructions, see:
-- **[Complete Setup Guide](docs/COMPLETE_SETUP_GUIDE.md)**
+- **[Setup Guide](docs/SETUP_GUIDE.md)**
 
 For issues, check:
 - GitHub Issues: https://github.com/Viggo0205/Hovedopgave/issues
