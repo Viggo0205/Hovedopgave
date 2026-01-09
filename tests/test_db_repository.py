@@ -203,8 +203,8 @@ class TestDatabaseRepository:
         # Should only have 2 versions (latest)
         all_analyses = db_repository.get_all_analyses(user_id)
         assert len(all_analyses) == 2
-        assert all_analyses[0]['analysis_data']['version'] == 3
-        assert all_analyses[1]['analysis_data']['version'] == 2
+        assert all_analyses[0]['metadata']['version'] == 3
+        assert all_analyses[1]['metadata']['version'] == 2
     
     def test_get_latest_analysis(self, db_repository, clean_database):
         """Test retrieving latest analysis."""
@@ -217,7 +217,7 @@ class TestDatabaseRepository:
         # Get latest
         latest = db_repository.get_latest_analysis(user_id)
         assert latest is not None
-        assert latest['analysis_data']['test'] == 'data'
+        assert latest['metadata']['test'] == 'data'
         assert latest['version_number'] == 1
     
     def test_get_latest_analysis_no_data(self, db_repository, clean_database):
@@ -352,5 +352,5 @@ class TestDatabaseRepository:
         # Retrieve and verify
         latest = db_repository.get_latest_analysis(user_id)
         assert latest is not None
-        assert isinstance(latest['analysis_data']['analyzed_at'], str)
-        assert latest['analysis_data']['analyzed_at'] == '2025-12-29T15:30:00'
+        assert isinstance(latest['metadata']['analyzed_at'], str)
+        assert latest['metadata']['analyzed_at'] == '2025-12-29T15:30:00'

@@ -20,9 +20,6 @@ This is an MCP server that figures out what developers are good at by looking at
 - [Quick Start](#quick-start) - Skip the handholding if you've done this before
 
 ### Technical Docs
-- **[Database Schema](docs/DATABASE_SCHEMA.md)** - All the SQL and database stuff
-- **[Database Testing](docs/DATABASE_TESTING.md)** - How to run the tests (53 of them!)
-- **[Rate Limiting](docs/RATE_LIMITING.md)** - How we handle API rate limits
 - **[API Reference](docs/USER_STORY_DATAANALYST_IMPLEMENTATION.md)** - Available MCP tools and how to use them
 
 ### Legacy Documentation
@@ -44,10 +41,7 @@ This is an MCP server that figures out what developers are good at by looking at
 ```
 Hovedopgave/
 ├── docs/                          # 📚 Documentation
-│   ├── COMPLETE_SETUP_GUIDE.md   # ⭐ Main setup guide
-│   ├── DATABASE_SCHEMA.md         # Database reference
-│   ├── DATABASE_TESTING.md        # Testing guide
-│   └── RATE_LIMITING.md           # Rate limiting details
+│   └── COMPLETE_SETUP_GUIDE.md   # ⭐ Main setup guide
 │
 ├── src/                           # 🐍 Python source code
 │   ├── analyzers/                # Analysis engines
@@ -66,20 +60,14 @@ Hovedopgave/
 │   └── server.py                 # MCP server
 │
 ├── scripts/                       # 🔧 Utility scripts
-│   ├── database/                 # Database setup scripts
-│   │   ├── setup_database.bat
-│   │   └── apply_auto_update_schema.bat
+│   ├── database/                 # Database utilities
 │   ├── pgagent/                  # Auto-update scripts
-│   │   ├── setup_pgagent.ps1
-│   │   ├── reset_pgagent.ps1
-│   │   └── configure_pgagent.bat
-│   └── testing/                  # Test utilities
-│       ├── run_tests.bat
-│       └── test_*.py
+│   └── utilities/
+│       └── setup_claude_desktop.py
 │
-├── tests/                         # 🧪 Test suite (53 tests)
-│   ├── test_db_connection.py     # Connection tests (15)
-│   ├── test_db_repository.py     # Repository tests (27)
+├── tests/                         # 🧪 Test suite (44 tests)
+│   ├── test_db_connection.py     # Connection tests (12)
+│   ├── test_db_repository.py     # Repository tests (21)
 │   └── test_db_integration.py    # Integration tests (11)
 │
 ├── .env                          # 🔐 Environment variables
@@ -98,44 +86,37 @@ Hovedopgave/
 
 ### Getting It Running
 
-```powershell
-# 1. Grab the code
+```bash
+# 1. Clone repository
 git clone https://github.com/Viggo0205/Hovedopgave.git
 cd Hovedopgave
 
-# 2. Set up the database
-.\scripts\database\setup_database.bat
+# 2. Install Python packages
+uv sync
 
-# 3. Install Python stuff
-pip install -r requirements.txt
+# 3. Create .env file with your credentials
+# See SETUP_GUIDE.md for details on getting GitHub token
 
-# 4. Add your API keys
-cp .env.example .env
-# Open .env and add your GitHub token
+# 4. Setup database
+python setup_database_complete.py
 
-# 5. Make sure everything works
-.\scripts\testing\run_tests.bat
+# 5. Verify everything works
+pytest tests/ -v
 ```
+
+For detailed step-by-step instructions, see [SETUP_GUIDE.md](SETUP_GUIDE.md)
 
 ### Using It with Claude Desktop
 
-```powershell
-# Connect to Claude Desktop
-python setup_claude_desktop.py
+```bash
+# Setup Claude Desktop integration
+python scripts/utilities/setup_claude_desktop.py
 
-# Restart Claude Desktop
-# Then just ask: "Analyze my GitHub profile"
+# Restart Claude Desktop, then ask Claude:
+# "Analyze developer username123 from GitHub"
 ```
 
-### Running It Manually
-
-```powershell
-# Fire up the server
-.\start_mcp_server.bat
-
-# Check what tools are available
-python list_tools.py
-```
+For full setup instructions, see [SETUP_GUIDE.md](SETUP_GUIDE.md)
 
 ## 🔧 What This Thing Can Do
 
@@ -145,23 +126,19 @@ python list_tools.py
 - `get_github_profile` - Just the basics about a GitHub user
 - `compare_developers` - See how two developers stack up
 
+## 🔧 Available MCP Tools
+
+### Analysis Tools
+- `analyze_github_developer` - Analyze GitHub profile and extract skills
+- `get_github_profile` - Get basic GitHub user information
+
 ### Database Tools
-- `save_analysis_to_database` - Save results so you don't lose them
-- `get_user_competence_overview` - Pull up someone's skill profile
-- `get_previous_analysis` - Check out older analyses
-- `get_all_competences` - See every skill we track
+- `save_analysis_to_database` - Save analysis results
+- `get_user_competence_overview` - Get developer's skill profile
+- `get_all_competences` - List all tracked competences
 
-### Other Handy Tools
-- `export_developer_profile` - Export data (GDPR-friendly JSON)
-- `get_skill_categories` - See how we organize skills
-
-## 🧪 Testing
-
-```powershell
-# Run everything (all 53 tests)
-.\scripts\testing\run_tests.bat
-
-# Just run one test file
+### Export Tools
+- `export_developer_profile` - Export developer data (GDPR-compliant)
 python -m pytest tests/test_db_connection.py -v
 
 # See how much code is covered
@@ -190,7 +167,7 @@ python -m pytest tests/ --cov=src --cov-report=html
 - `competence_categories` - Skills organized by type
 - `v_update_status` - Check when auto-updates last ran
 
-Want the full SQL? Check out the [Database Schema](docs/DATABASE_SCHEMA.md) doc.
+Want to see the SQL? Check `src/db/schema.sql`.
 
 ## 🔄 Automatic Updates (Optional)
 
@@ -265,7 +242,7 @@ We take this stuff seriously:
 1. Fork the repository
 2. Create feature branch: `git checkout -b feature-name`
 3. Make changes and add tests
-4. Run test suite: `.\scripts\testing\run_tests.bat`
+4. Run test suite: `pytest tests/ -v`
 5. Commit changes: `git commit -m "Add feature"`
 6. Push to branch: `git push origin feature-name`
 7. Submit pull request
@@ -302,41 +279,35 @@ cat $env:APPDATA\Claude\claude_desktop_config.json
 psql -U postgres -c "DROP DATABASE IF EXISTS developer_skills_test;"
 
 # Run tests again (they'll recreate it)
-.\scripts\testing\run_tests.bat
+pytest tests/ -v
 ```
 
 Still stuck? Check the [Complete Setup Guide - Troubleshooting](docs/COMPLETE_SETUP_GUIDE.md#troubleshooting) section.
-DATABASE_URL=postgresql://postgres:password@localhost:5432/developer_skills
+
+### Database connection issues
+```powershell
+# Check your .env file has correct credentials
+cat .env
+
+# Verify PostgreSQL is running
+Get-Service postgresql-x64-18
 ```
 
-**MCP server not connecting:**
+### MCP server not connecting
 ```powershell
-# Test server locally
-cd e:\Nymappe\Hovedopgave
-$env:PYTHONPATH = "e:\Nymappe\Hovedopgave\src"
-python -m server
-
-# Check Claude config
+# Verify Claude Desktop config
 cat $env:APPDATA\Claude\claude_desktop_config.json
+
+# Run setup again
+python scripts/utilities/setup_claude_desktop.py
 ```
 
-**Tests failing:**
-```powershell
-# Clean test database
-psql -U postgres -c "DROP DATABASE IF EXISTS developer_skills_test;"
-
-# Re-run tests (creates fresh DB)
-.\scripts\testing\run_tests.bat
-```
-
-See [Complete Setup Guide - Troubleshooting](docs/COMPLETE_SETUP_GUIDE.md#troubleshooting) for more solutions.
+See [SETUP_GUIDE.md](SETUP_GUIDE.md) for more solutions.
 
 ## 📞 Support
 
 For detailed setup instructions, see:
 - **[Complete Setup Guide](docs/COMPLETE_SETUP_GUIDE.md)**
-- **[Database Schema](docs/DATABASE_SCHEMA.md)**
-- **[Database Testing](docs/DATABASE_TESTING.md)**
 
 For issues, check:
 - GitHub Issues: https://github.com/Viggo0205/Hovedopgave/issues

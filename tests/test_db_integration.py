@@ -142,7 +142,7 @@ class TestStoredProcedures:
         )
         assert len(result) == 1
         assert result[0]['version_number'] == 1
-        assert result[0]['analysis_data']['language'] == 'Python'
+        assert result[0]['metadata']['language'] == 'Python'
 
 
 class TestAutoUpdateFeatures:
@@ -250,6 +250,17 @@ class TestDatabaseViews:
     
     def test_user_competence_overview_view(self, db_connection, clean_database):
         """Test user_competence_overview view."""
+        # Ensure ranks exist (required by view)
+        db_connection.execute_query("""
+            INSERT INTO rank (id, name, min_percent, max_percent)
+            VALUES 
+                (1, 'Beginner', 0, 24),
+                (2, 'Intermediate', 25, 49),
+                (3, 'Advanced', 50, 74),
+                (4, 'Expert', 75, 100)
+            ON CONFLICT (id) DO NOTHING
+        """, fetch=False)
+        
         # Create user and competence
         user_result = db_connection.execute_query(
             "SELECT get_or_create_user(%s, NULL, %s, NULL, NULL, NULL)",
@@ -265,7 +276,7 @@ class TestDatabaseViews:
         
         # Add user competence - use the returned value to verify
         db_connection.execute_query(
-            "SELECT update_user_competence(%s, %s, %s, %s)",
+            "SELECT update_user_competence(%s, %s, %s, %s, NULL)",
             (user_id, competence_id, 65.0, 15)
         )
         
@@ -274,13 +285,18 @@ class TestDatabaseViews:
             "SELECT * FROM user_competence WHERE user_id = %s AND competence_id = %s",
             (user_id, competence_id)
         )
-        assert len(uc_verify) > 0, "user_competence row not inserted"
+        assert len(uc_verify) > 0, f"user_competence row not inserted for user_id={user_id}, competence_id={competence_id}"
         
         # Query view
         result = db_connection.execute_query(
             "SELECT * FROM user_competence_overview WHERE user_id = %s",
             (user_id,)
         )
+        
+        # If view returns 0 rows, check if rank table has data
+        if len(result) == 0:
+            rank_check = db_connection.execute_query("SELECT * FROM rank")
+            assert len(rank_check) > 0, "Rank table is empty - view cannot work without ranks"
         
         assert len(result) >= 1, f"Expected at least 1 row in view, got {len(result)}"
         assert result[0]['full_name'] == 'View User'
