@@ -1,11 +1,11 @@
 """GitHub analyzer for analyzing and processing GitHub data."""
 
 import logging
-from typing import Dict, Any
+from typing import Dict, Any, List
 from collections import defaultdict
 from services.github_service import GitHubService, GitHubServiceDegradedException
 from models.analysis import GitHubAnalysisResult
-from shared.language_categories import LANGUAGE_CATEGORIES
+from shared.language_categories import LANGUAGE_CATEGORIES, get_category_for_language
 
 logger = logging.getLogger(__name__)
 
@@ -161,3 +161,95 @@ class GitHubAnalyzer:
         expertise_areas = {k: v for k, v in expertise_areas.items() if v}
         
         return expertise_areas
+    
+    def get_languages_by_category(self, username: str) -> Dict[str, Any]:
+        """
+        Get all programming languages from a developer's profile organized by categories.
+        Shows language distribution across categories and identifies top programming languages.
+        
+        Args:
+            username: GitHub username to analyze
+            
+        Returns:
+            Dictionary with categorized languages and top programming languages
+        """
+        # Get data from service
+        profile = self.github_service.get_user_profile(username)
+        repositories = self.github_service.get_user_repositories(username)
+        language_data = self.github_service.get_language_data(repositories)
+        
+        # Analyze language skills
+        language_stats = self._analyze_language_skills(language_data, repositories)
+        
+        # Sort languages by total lines to get top languages
+        sorted_languages = sorted(
+            language_stats.items(),
+            key=lambda x: x[1].get("total_lines", 0),
+            reverse=True
+        )
+        
+        # Get top programming languages (only those in "Programming Languages" category)
+        top_programming_languages = []
+        ranks = ["Primært programmeringssprog", "Sekundært sprog", "Tredje mest anvendte sprog"]
+        
+        for lang, data in sorted_languages:
+            category = get_category_for_language(lang)
+            if category == "Programming Languages":
+                top_programming_languages.append({
+                    "language": lang,
+                    "rank": ranks[len(top_programming_languages)] if len(top_programming_languages) < 3 else f"{len(top_programming_languages) + 1}. mest anvendte sprog",
+                    "total_lines": data.get("total_lines", 0),
+                    "level": data.get("level", "Unknown"),
+                    "repositories": data.get("repositories", 0)
+                })
+                if len(top_programming_languages) >= 3:
+                    break
+        
+        # Organize all languages by category
+        categorized_languages = {}
+        for category, languages in LANGUAGE_CATEGORIES.items():
+            categorized_languages[category] = []
+            
+            # Find all languages in this category from the developer's skills
+            for lang, data in language_stats.items():
+                if get_category_for_language(lang) == category:
+                    categorized_languages[category].append({
+                        "language": lang,
+                        "level": data.get("level", "Unknown"),
+                        "total_lines": data.get("total_lines", 0),
+                        "repositories": data.get("repositories", 0)
+                    })
+            
+            # Sort by total lines within each category
+            categorized_languages[category].sort(
+                key=lambda x: x["total_lines"],
+                reverse=True
+            )
+        
+        # Add "Other Technologies" for languages not in predefined categories
+        other_languages = []
+        for lang, data in language_stats.items():
+            if get_category_for_language(lang) == "Other Technologies":
+                other_languages.append({
+                    "language": lang,
+                    "level": data.get("level", "Unknown"),
+                    "total_lines": data.get("total_lines", 0),
+                    "repositories": data.get("repositories", 0)
+                })
+        
+        if other_languages:
+            other_languages.sort(key=lambda x: x["total_lines"], reverse=True)
+            categorized_languages["Other Technologies"] = other_languages
+        
+        # Remove empty categories
+        categorized_languages = {
+            k: v for k, v in categorized_languages.items() if v
+        }
+        
+        return {
+            "username": username,
+            "top_programming_languages": top_programming_languages,
+            "languages_by_category": categorized_languages,
+            "total_languages": len(language_stats),
+            "total_repositories": len(repositories)
+        }
