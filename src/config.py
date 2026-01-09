@@ -42,7 +42,10 @@ class Config:
         self.max_issues_analyzed: int = int(os.getenv("MAX_ISSUES_ANALYZED", "200"))
     
    
-   # bliver ikke kaldt nogen steder lige nu
+    # validate() bruges til komplet credential-validering ved serverstart/debugging
+    # get_github_configured() og get_jira_configured() bruges runtime til at
+    # tjekke om en specifik integration er konfigureret, da systemet kan fungere
+    # med kun én integration aktiv ad gangen
     def validate(self) -> bool:
         """
         Validate the configuration.
