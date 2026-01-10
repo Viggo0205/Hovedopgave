@@ -176,3 +176,46 @@ class DatabaseConnection:
                 cursor.close()
             if conn:
                 self.return_connection(conn)
+    
+    def execute_transaction(self, queries: list) -> None:
+        """
+        Execute multiple queries in a single transaction.
+        
+        Args:
+            queries: List of (query, params) tuples
+        """
+        conn = None
+        cursor = None
+        try:
+            conn = self.get_connection()
+            cursor = conn.cursor()
+            
+            for query, params in queries:
+                cursor.execute(query, params)
+            
+            conn.commit()
+            
+        except Exception as e:
+            if conn:
+                conn.rollback()
+            logger.error(f"Transaction error: {e}")
+            raise
+        finally:
+            if cursor:
+                cursor.close()
+            if conn:
+                self.return_connection(conn)
+    
+    def health_check(self) -> bool:
+        """
+        Check if database connection is healthy.
+        
+        Returns:
+            True if connection is healthy, False otherwise
+        """
+        try:
+            result = self.execute_query("SELECT 1 as health")
+            return result is not None and len(result) > 0
+        except Exception as e:
+            logger.error(f"Health check failed: {e}")
+            return False
