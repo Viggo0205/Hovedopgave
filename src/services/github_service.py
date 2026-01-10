@@ -35,8 +35,8 @@ class GitHubService:
         
         # Initialize rate limiter: max X requests per hour
         # GitHub free tier: 5000 requests/hour = ~83 requests/minute = 1.38 req/sec
-        # We'll use conservative 60 requests/minute to stay safe
-        requests_per_minute = 60
+        # Using 80 requests/minute for faster analysis while staying under limit
+        requests_per_minute = 80
         self.throttler = Throttler(rate_limit=requests_per_minute, period=60.0)
         
         logger.info(f"GitHubService initialized with rate limit: {requests_per_minute} req/min")
@@ -109,7 +109,7 @@ class GitHubService:
         }
         return sanitize_developer_profile(profile)
     
-    async def get_user_repositories(self, username: str, limit: int = 50) -> list:
+    async def get_user_repositories(self, username: str, limit: int = 25) -> list:
         """Get raw repository data for a user with rate limiting."""
         user = await self._call_api(self.github.get_user, username)
         repos = []

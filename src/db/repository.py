@@ -192,7 +192,7 @@ class DatabaseRepository:
             # Serialize datetime objects to ISO format strings
             serialized_metadata = _serialize_datetime(metadata)
             
-            query = "SELECT save_analysis(%s, %s, %s, %s)"
+            query = "SELECT save_analysis(%s, %s::jsonb, %s, %s::varchar)"
             result = self.db.execute_query(
                 query,
                 (user_id, json.dumps(serialized_metadata), total_repositories, data_source)
@@ -343,6 +343,28 @@ class DatabaseRepository:
             
         except Exception as e:
             logger.error(f"Error getting all competences: {e}")
+            return []
+    
+    def get_all_active_users(self) -> List[Dict[str, Any]]:
+        """
+        Get all active users from the database.
+        
+        Returns:
+            List of active users with their basic information
+        """
+        try:
+            query = """
+                SELECT id, github_username, jira_email, full_name, display_name, 
+                       company, location, role_id, last_analyzed_at, auto_update_enabled
+                FROM users 
+                WHERE is_active = TRUE 
+                ORDER BY full_name, github_username
+            """
+            results = self.db.execute_query(query)
+            return [dict(row) for row in results]
+            
+        except Exception as e:
+            logger.error(f"Error getting all active users: {e}")
             return []
     
     def get_user_by_identifier(

@@ -334,17 +334,39 @@ async def get_all_employees(
     include_metadata: bool = False
 ) -> Dict[str, Any]:
     """
-    Discover all collaborators and team members from GitHub repositories.
+    Get all employees from database with fallback to GitHub discovery.
+    
+    Priority:
+    1. Get active users from database
+    2. If empty, check if token user is in an org -> get org members
+    3. If not in org -> get collaborators from user's repositories
     
     Args:
         source: Data source ("github" or "all")
         include_metadata: Include additional metadata (commit counts, last activity)
     
     Returns:
-        Dictionary containing discovered collaborators with optional metadata
+        Dictionary containing employees with optional metadata
     """
     try:
         logger.info(f"Fetching all employees from source: {source}")
+        
+        from db.repository import DatabaseRepository
+        db_repo = DatabaseRepository()
+        
+        # Try to get employees from database first
+        db_users = db_repo.get_all_active_users()
+        
+        if db_users:
+            logger.info(f"Found {len(db_users)} active users in database")
+            return {
+                "github_employees": db_users,
+                "total_count": len(db_users),
+                "source": "database"
+            }
+        
+        # Fallback: Database is empty, discover from GitHub
+        logger.info("Database is empty, discovering employees from GitHub")
         
         config = Config()
         employees = {
@@ -356,28 +378,47 @@ async def get_all_employees(
         if source in ["github", "all"] and config.github_token:
             try:
                 github_service = GitHubService()
-                analyzer = GitHubAnalyzer(github_service)
                 
-                # Get authenticated user's organizations
                 from github import Github, Auth
                 auth = Auth.Token(config.github_token)
                 g = Github(auth=auth)
                 user = g.get_user()
                 
                 discovered = []
-                for org in user.get_orgs():
-                    members = github_service.get_organization_members(org.login)
-                    discovered.extend(members)
+                orgs = list(user.get_orgs())
+                
+                if orgs:
+                    # User is in organizations - get org members
+                    logger.info(f"User belongs to {len(orgs)} organizations, fetching members")
+                    for org in orgs:
+                        members = github_service.get_organization_members(org.login)
+                        discovered.extend(members)
+                else:
+                    # User not in org - get collaborators from repos
+                    logger.info("User not in any organization, fetching collaborators from repositories")
+                    repos = await github_service.get_user_repositories(user.login, limit=50)
+                    collaborators_set = set()
+                    
+                    for repo in repos:
+                        try:
+                            repo_obj = g.get_repo(f"{user.login}/{repo['name']}")
+                            for collab in repo_obj.get_collaborators():
+                                collaborators_set.add(collab.login)
+                        except Exception as e:
+                            logger.warning(f"Could not get collaborators for {repo['name']}: {e}")
+                            continue
+                    
+                    discovered = [{"username": username} for username in collaborators_set]
                 
                 # Deduplicate by username
                 unique_employees = {emp['username']: emp for emp in discovered}.values()
                 employees["github_employees"] = list(unique_employees)
                 employees["total_count"] = len(unique_employees)
                 
-                logger.info(f"Discovered {len(unique_employees)} GitHub collaborators")
+                logger.info(f"Discovered {len(unique_employees)} GitHub employees")
                 
             except Exception as e:
-                logger.error(f"Failed to discover GitHub collaborators: {e}")
+                logger.error(f"Failed to discover GitHub employees: {e}")
                 employees["github_employees"] = []
                 employees["error"] = str(e)
         
