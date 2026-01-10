@@ -59,7 +59,7 @@ async def analyze_github_developer(
         # Perform the analysis
         analysis_result = await analyzer.analyze_developer(username)
         
-        return {
+        result = {
             "developer": username,
             "analysis_type": "github",
             "data_source": "real_api",
@@ -69,8 +69,14 @@ async def analyze_github_developer(
             "language_skills": analysis_result.get("language_skills", {}),
             "expertise_areas": analysis_result.get("expertise_areas", {}),
             "total_repositories": analysis_result.get("total_repositories", 0),
-            "analysis_date": datetime.now().isoformat()
+            "analysis_date": datetime.now().isoformat(),
+            "_save_prompt": f"\n\n💾 Would you like to save this analysis to the database?\n\nUse: save_analysis_to_database(github_username='{username}')\n\nThis will store the analysis for version tracking and historical comparison."
         }
+        
+        # Log the prompt for the AI to see
+        logger.info(f"Analysis complete for {username}. Prompting to save to database.")
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error analyzing GitHub developer {username}: {str(e)}")
@@ -118,7 +124,8 @@ async def get_github_profile(
             "developer": github_username,
             "analysis_type": "github_profile",
             "profile_data": profile_result,
-            "analysis_date": datetime.now().isoformat()
+            "analysis_date": datetime.now().isoformat(),
+            "_save_prompt": f"\n\n💾 Would you like to save this profile to the database?\n\nUse: save_analysis_to_database(github_username='{github_username}')\n\nNote: This only saves basic profile. For full analysis, use analyze_github_developer first."
         }
         
     except Exception as e:
@@ -172,7 +179,8 @@ async def compare_developers(
                 "dev2_languages": len(dev2_analysis.get("language_skills", {})),
                 "dev1_repos": dev1_analysis.get("total_repositories", 0),
                 "dev2_repos": dev2_analysis.get("total_repositories", 0)
-            }
+            },
+            "_save_prompt": f"\n\n💾 Would you like to save both developer analyses to the database?\n\nDeveloper 1: save_analysis_to_database(github_username='{developer1_github}')\nDeveloper 2: save_analysis_to_database(github_username='{developer2_github}')\n\nSaving allows for historical tracking and future comparisons."
         }
         
     except Exception as e:
@@ -275,6 +283,48 @@ async def export_developer_profile(
             "records_exported": 0,
             "error_message": str(e),
             "timestamp": datetime.now().isoformat()
+        }
+
+
+
+
+@mcp.tool()
+async def get_developer_languages(
+    username: str
+) -> Dict[str, Any]:
+    """
+    Get all programming languages from a developer's profile organized by categories.
+    Shows language distribution across categories and identifies top programming languages.
+    
+    Args:
+        username: GitHub username to get language information for
+    
+    Returns:
+        Dictionary containing:
+        - Categorized languages (Programming Languages, Web Frontend, Backend/Server, etc.)
+        - Top 3 programming languages by usage (lines of code)
+        - Total number of languages and repositories
+    """
+    try:
+        config = Config()
+        github_service = GitHubService()
+        analyzer = GitHubAnalyzer(github_service)
+        
+        logger.info(f"Getting language information for user: {username}")
+        
+        # Call analyzer to get languages by category
+        result = await analyzer.get_languages_by_category(username)
+        
+        # Add timestamp
+        result["analysis_date"] = datetime.now().isoformat()
+        
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting languages for {username}: {str(e)}")
+        return {
+            "error": f"Failed to get language information: {str(e)}",
+            "username": username
         }
 
 
@@ -488,7 +538,7 @@ async def save_analysis_to_database(
     full_name: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Analyze a developer and save results to the database.
+    Analyze a developer and save results to the database (normalized with versioning).
     
     Args:
         github_username: GitHub username for analysis
@@ -519,7 +569,8 @@ async def save_analysis_to_database(
         analyzer = GitHubAnalyzer(github_service)
         analysis_result = await analyzer.analyze_developer(github_username)
         
-        # Save to database
+        # Initialize database and skill processor
+        db_repo = DatabaseRepository()
         skill_processor = SkillProcessor(db_repo)
         
         # Create or get user
@@ -528,20 +579,111 @@ async def save_analysis_to_database(
             full_name=full_name or github_username
         )
         
-        # Save analysis
+        # Save metadata FIRST to get version number
+        metadata = {
+            "profile": analysis_result.get("profile", {}),
+            "raw_language_data": analysis_result.get("language_skills", {}),
+            "expertise_areas": analysis_result.get("expertise_areas", {}),
+            "github_username": github_username
+        }
+        
         analysis_version = db_repo.save_analysis(
             user_id=user_id,
-            analysis_data=analysis_result
+            metadata=metadata,
+            total_repositories=analysis_result.get("total_repositories", 0),
+            data_source="github"
         )
         
-        return {
+        # Process skills from analysis
+        skill_assessment = skill_processor.process_github_data(analysis_result)
+        
+        # Extract and save ALL skills (technical, soft, domain) to BOTH current AND history
+        skills_saved = 0
+        skills_failed = []
+        
+        # Get all skill types
+        all_skills = []
+        all_skills.extend(skill_assessment.get("technical_skills", []))
+        all_skills.extend(skill_assessment.get("soft_skills", []))
+        all_skills.extend(skill_assessment.get("domain_skills", []))
+        
+        for skill in all_skills:
+            try:
+                # Get skill details
+                competence_name = skill.get("name")
+                if not competence_name:
+                    continue
+                
+                # Determine category from skill data
+                skill_category = skill.get("category", "programming_languages")
+                
+                # Ensure the competence exists in the database
+                db_repo.add_competence(
+                    name=competence_name,
+                    category=skill_category,
+                    description=f"{competence_name} skill from {skill_category}"
+                )
+                
+                # Calculate percentage from skill level and confidence
+                confidence = skill.get("confidence_score", 0.5)
+                usage_freq = skill.get("usage_frequency", 0)
+                
+                # Get skill level - handle both string and enum formats
+                level = skill.get("level", "intermediate")
+                if hasattr(level, 'name'):  # It's an enum
+                    level_str = level.name.lower()
+                elif hasattr(level, 'value'):  # Pydantic model
+                    level_str = level.value.lower()
+                else:  # It's already a string
+                    level_str = str(level).lower().replace("skilllevel.", "")
+                
+                # Convert skill level to percentage (0-100)
+                level_map = {
+                    "beginner": 20,
+                    "intermediate": 50,
+                    "advanced": 75,
+                    "expert": 95
+                }
+                base_percent = level_map.get(level_str, 50)
+                
+                # Adjust based on confidence (±20%)
+                adjusted_percent = min(max(base_percent + (confidence - 0.5) * 40, 0), 100)
+                
+                # Update user competence (BOTH current AND history with version)
+                db_repo.update_user_competence(
+                    user_id=user_id,
+                    competence_name=competence_name,
+                    procent=round(adjusted_percent, 2),
+                    usage_frequency=usage_freq,
+                    analysis_version=analysis_version  # NEW: Also save to history
+                )
+                
+                skills_saved += 1
+                logger.info(f"✓ Saved: {competence_name} ({skill_category}) = {adjusted_percent:.1f}% [usage: {usage_freq}] (v{analysis_version})")
+                
+            except Exception as skill_error:
+                error_msg = f"{skill.get('name', 'Unknown')}: {str(skill_error)}"
+                skills_failed.append(error_msg)
+                logger.warning(f"✗ Failed to save skill: {error_msg}")
+                continue
+        
+        result = {
             "status": "success",
             "user_id": user_id,
             "analysis_version": analysis_version,
+            "skills_saved": skills_saved,
+            "total_skills_found": len(all_skills),
             "github_username": github_username,
-            "message": "Analysis saved to database",
-            "timestamp": datetime.now().isoformat()
+            "message": f"✓ Analysis saved: {skills_saved}/{len(all_skills)} skills stored (current + history v{analysis_version})",
+            "timestamp": datetime.now().isoformat(),
+            "architecture": "normalized_with_versioning"
         }
+        
+        if skills_failed:
+            result["skills_failed"] = skills_failed
+            result["warning"] = f"{len(skills_failed)} skills could not be saved"
+        
+        return result
         
     except Exception as e:
         logger.error(f"Error saving analysis to database: {e}")
@@ -558,13 +700,14 @@ async def get_previous_analysis(
     github_username: str
 ) -> Dict[str, Any]:
     """
-    Retrieve previous analysis versions from the database.
+    Retrieve previous analysis versions from the database (normalized structure).
+    Returns metadata + competence history for each version.
     
     Args:
         github_username: GitHub username
         
     Returns:
-        All stored analysis versions for the user
+        All stored analysis versions with competences for the user
     """
     try:
         from db.repository import DatabaseRepository
@@ -580,8 +723,24 @@ async def get_previous_analysis(
                 "timestamp": datetime.now().isoformat()
             }
         
-        # Get all analyses
-        analyses = db_repo.get_all_analyses(user['id'])
+        # Get all analysis metadata
+        analyses_metadata = db_repo.get_all_analyses(user['id'])
+        
+        # For each version, get the competences
+        analyses_with_competences = []
+        for analysis in analyses_metadata:
+            version = analysis['version_number']
+            competences = db_repo.get_competences_for_version(user['id'], version)
+            
+            analyses_with_competences.append({
+                "version": version,
+                "analysis_date": analysis['analysis_date'],
+                "total_repositories": analysis['total_repositories'],
+                "data_source": analysis['data_source'],
+                "metadata": analysis['metadata'],
+                "competences": competences,
+                "total_competences": len(competences)
+            })
         
         return {
             "status": "success",
@@ -589,9 +748,9 @@ async def get_previous_analysis(
                 "id": user['id'],
                 "github_username": user['github_username']
             },
-            "total_versions": len(analyses),
-            "analyses": analyses,
-            "message": f"Found {len(analyses)} analysis version(s)",
+            "total_versions": len(analyses_with_competences),
+            "analyses": analyses_with_competences,
+            "message": f"Found {len(analyses_with_competences)} analysis version(s)",
             "timestamp": datetime.now().isoformat()
         }
         
@@ -607,15 +766,19 @@ async def get_previous_analysis(
 @mcp.tool()
 async def remove_developer(
     github_username: Optional[str] = None,
-    jira_email: Optional[str] = None
+    jira_email: Optional[str] = None,
+    performed_by: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Remove (deactivate) a developer who no longer works at the company.
     This is a soft delete - the user's data is retained but they won't appear in searches.
     
+    ⚠️ Admin only: This action requires administrator privileges.
+    
     Args:
         github_username: GitHub username of the developer to remove
         jira_email: Jira email of the developer to remove
+        performed_by: GitHub username or email of the administrator performing this action
         
     Returns:
         Confirmation of removal with developer details
@@ -623,47 +786,10 @@ async def remove_developer(
     try:
         from db.repository import DatabaseRepository
         
-        if not github_username and not jira_email:
-            return {
-                "status": "error",
-                "error": "Either github_username or jira_email must be provided",
-                "timestamp": datetime.now().isoformat()
-            }
-        
         db_repo = DatabaseRepository()
-        
-        # Check if user exists and is active
-        user = db_repo.get_user_by_identifier(github_username, jira_email, include_inactive=False)
-        if not user:
-            return {
-                "status": "not_found",
-                "message": "No active developer found with the provided identifier",
-                "github_username": github_username,
-                "jira_email": jira_email,
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        # Deactivate the user
-        success = db_repo.deactivate_user(github_username, jira_email)
-        
-        if success:
-            return {
-                "status": "success",
-                "message": f"Developer '{user['github_username'] or user['jira_email']}' has been removed",
-                "developer": {
-                    "github_username": user.get('github_username'),
-                    "full_name": user.get('full_name'),
-                    "display_name": user.get('display_name')
-                },
-                "note": "This is a soft delete. Data is retained and user can be reactivated if needed.",
-                "timestamp": datetime.now().isoformat()
-            }
-        else:
-            return {
-                "status": "error",
-                "error": "Failed to deactivate user",
-                "timestamp": datetime.now().isoformat()
-            }
+        result = db_repo.remove_developer(github_username, jira_email, performed_by)
+        result["timestamp"] = datetime.now().isoformat()
+        return result
         
     except Exception as e:
         logger.error(f"Error removing developer: {e}")
@@ -677,14 +803,18 @@ async def remove_developer(
 @mcp.tool()
 async def reactivate_developer(
     github_username: Optional[str] = None,
-    jira_email: Optional[str] = None
+    jira_email: Optional[str] = None,
+    performed_by: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Reactivate a previously removed developer.
     
+    ⚠️ Admin only: This action requires administrator privileges.
+    
     Args:
         github_username: GitHub username of the developer to reactivate
         jira_email: Jira email of the developer to reactivate
+        performed_by: GitHub username or email of the administrator performing this action
         
     Returns:
         Confirmation of reactivation
@@ -692,33 +822,49 @@ async def reactivate_developer(
     try:
         from db.repository import DatabaseRepository
         
-        if not github_username and not jira_email:
-            return {
-                "status": "error",
-                "error": "Either github_username or jira_email must be provided",
-                "timestamp": datetime.now().isoformat()
-            }
-        
         db_repo = DatabaseRepository()
-        success = db_repo.reactivate_user(github_username, jira_email)
-        
-        if success:
-            return {
-                "status": "success",
-                "message": f"Developer has been reactivated",
-                "github_username": github_username,
-                "jira_email": jira_email,
-                "timestamp": datetime.now().isoformat()
-            }
-        else:
-            return {
-                "status": "not_found",
-                "message": "No inactive developer found with the provided identifier",
-                "timestamp": datetime.now().isoformat()
-            }
+        result = db_repo.reactivate_developer(github_username, jira_email, performed_by)
+        result["timestamp"] = datetime.now().isoformat()
+        return result
         
     except Exception as e:
         logger.error(f"Error reactivating developer: {e}")
+        return {
+            "status": "error",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
+
+
+@mcp.tool()
+async def get_admin_audit_log(
+    user_id: Optional[int] = None,
+    action: Optional[str] = None,
+    limit: int = 50
+) -> Dict[str, Any]:
+    """
+    Get audit log of administrative actions (deactivations, reactivations, deletions).
+    
+    ⚠️ Admin only: This action requires administrator privileges.
+    
+    Args:
+        user_id: Optional filter by user ID
+        action: Optional filter by action type ('deactivate', 'reactivate', 'delete_permanently')
+        limit: Maximum number of entries to return (default 50)
+        
+    Returns:
+        List of audit log entries with timestamps and admin identifiers
+    """
+    try:
+        from db.repository import DatabaseRepository
+        
+        db_repo = DatabaseRepository()
+        result = db_repo.get_audit_log(user_id, action, limit)
+        result["timestamp"] = datetime.now().isoformat()
+        return result
+        
+    except Exception as e:
+        logger.error(f"Error getting audit log: {e}")
         return {
             "status": "error",
             "error": str(e),
@@ -1007,7 +1153,7 @@ async def permanently_delete_developer(
     PERMANENTLY DELETE a developer and ALL their data (GDPR "right to be forgotten").
     This is irreversible! All analyses, competences, and history will be removed.
     
-    ⚠️ WARNING: This is a hard delete. Data cannot be recovered!
+    WARNING: This is a hard delete. Data cannot be recovered!
     
     Args:
         github_username: GitHub username of the developer to delete
@@ -1020,48 +1166,10 @@ async def permanently_delete_developer(
     try:
         from db.repository import DatabaseRepository
         
-        if not confirm:
-            return {
-                "status": "error",
-                "error": "Confirmation required. Set confirm=True to proceed with permanent deletion.",
-                "warning": "⚠️ This will permanently delete ALL data for this developer. This action cannot be undone!",
-                "timestamp": datetime.now().isoformat()
-            }
-        
-        if not github_username and not jira_email:
-            return {
-                "status": "error",
-                "error": "Either github_username or jira_email must be provided",
-                "timestamp": datetime.now().isoformat()
-            }
-        
         db_repo = DatabaseRepository()
-        result = db_repo.delete_user_permanently(github_username, jira_email)
-        
-        if result.get("success"):
-            return {
-                "status": "success",
-                "message": "Developer permanently deleted (GDPR compliance)",
-                "developer": {
-                    "github_username": result.get('github_username'),
-                    "full_name": result.get('full_name'),
-                    "user_id": result.get('user_id')
-                },
-                "deleted_data": [
-                    "User profile",
-                    "All competence records",
-                    "All analysis history",
-                    "All associated timestamps"
-                ],
-                "warning": "This action cannot be undone",
-                "timestamp": datetime.now().isoformat()
-            }
-        else:
-            return {
-                "status": "error",
-                "error": result.get("error"),
-                "timestamp": datetime.now().isoformat()
-            }
+        result = db_repo.delete_user_permanently(github_username, jira_email, confirm)
+        result["timestamp"] = datetime.now().isoformat()
+        return result
         
     except Exception as e:
         logger.error(f"Error permanently deleting developer: {e}")

@@ -165,10 +165,18 @@ temp/
 *.cache
 
 # API keys and sensitive data
+.env
+.env.local
 config/secrets.json
 *.key
 *.pem
 credentials.json
+
+# Exports folder (may contain user data)
+exports/
+
+# Claude Desktop config (has local paths)
+json/
 
 # UV
 .uv/
