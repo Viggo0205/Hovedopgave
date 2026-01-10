@@ -313,7 +313,7 @@ async def get_developer_languages(
         logger.info(f"Getting language information for user: {username}")
         
         # Call analyzer to get languages by category
-        result = analyzer.get_languages_by_category(username)
+        result = await analyzer.get_languages_by_category(username)
         
         # Add timestamp
         result["analysis_date"] = datetime.now().isoformat()

@@ -162,7 +162,7 @@ class GitHubAnalyzer:
         
         return expertise_areas
     
-    def get_languages_by_category(self, username: str) -> Dict[str, Any]:
+    async def get_languages_by_category(self, username: str) -> Dict[str, Any]:
         """
         Get all programming languages from a developer's profile organized by categories.
         Shows language distribution across categories and identifies top programming languages.
@@ -174,8 +174,8 @@ class GitHubAnalyzer:
             Dictionary with categorized languages and top programming languages
         """
         # Get data from service
-        profile = self.github_service.get_user_profile(username)
-        repositories = self.github_service.get_user_repositories(username)
+        profile = await self.github_service.get_user_profile(username)
+        repositories = await self.github_service.get_user_repositories(username)
         language_data = self.github_service.get_language_data(repositories)
         
         # Analyze language skills
