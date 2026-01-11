@@ -118,25 +118,34 @@ python scripts/utilities/setup_claude_desktop.py
 # Restart Claude Desktop, then ask Claude:
 # "Analyze developer username123 from GitHub"
 ```
-Available MCP Tools
+## 🔧 Available MCP Tools (17 Total)
 
-### Analysis Tools
+### Analysis Tools (5)
 - `analyze_github_developer` - Comprehensive GitHub profile analysis with skill extraction
-- `analyze_jira_developer` - Analyze Jira activity to extract technical and project skills
 - `get_github_profile` - Retrieve basic GitHub user information
 - `compare_developers` - Side-by-side comparison of multiple developer profiles
+- `get_previous_analysis` - Retrieve historical analysis for comparison
+- `get_developer_languages` - Get all programming languages used by a developer
 
-### Database Tools
+### Database Management Tools (6)
 - `save_analysis_to_database` - Persist analysis results to PostgreSQL
 - `get_user_competence_overview` - Retrieve complete developer skill profile
 - `get_all_competences` - List all competencies tracked in the system
-- `remove_developer` - Remove developer data from database (GDPR-compliant)
+- `add_competence_to_database` - Add new competency to tracking system
+- `get_all_employees` - List all developers in the database
+- `get_employees_by_skill` - Find developers with specific skill and proficiency level
 
-### Export Tools
-- `export_developer_profile` - Export developer data in JSON format (privacy-safe
+### Developer Management Tools (4)
+- `remove_developer` - Soft-delete developer (GDPR-compliant, reversible)
+- `reactivate_developer` - Restore a previously removed developer
+- `permanently_delete_developer` - Permanently delete all developer data (GDPR right to erasure)
+- `list_removed_developers` - View all soft-deleted developers
 
-### Export Tools
-- `export_developer_profile` - Export developer data (GDPR-compliant)
+### Admin & Audit Tools (1)
+- `get_admin_audit_log` - View all administrative actions and changes
+
+### Export Tools (1)
+- `export_developer_profile` - Export developer data in JSON format (privacy-safe, GDPR-compliant)
 python -m pytest tests/test_db_connection.py -v
 
 # See how much code is covered
