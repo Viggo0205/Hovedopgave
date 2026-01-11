@@ -1,17 +1,17 @@
 # Developer Skill Analyzer
 
-This is an MCP server that figures out what developers are good at by looking at their GitHub and Jira activity. Everything gets stored in PostgreSQL so you can track how skills evolve over time.
+An MCP (Model Context Protocol) server that analyzes developer skills by examining GitHub and Jira activity. All analysis data is stored in PostgreSQL, enabling historical tracking and skill evolution over time.
 
 ## 🚀 What It Does
 
-- **GitHub Analysis** - Looks at your code, repos, and contributions to see what you're working with
-- **Jira Analysis** - Pulls insights from your tickets and project work
-- **Skill Assessment** - Automatically categorizes skills and figures out how good you are at them
-- **Database Storage** - Keeps everything in PostgreSQL so nothing gets lost
-- **Profile Comparison** - Compare different developers side-by-side
-- **Automatic Updates** - Set it and forget it - profiles update themselves via pgAgent
-- **Rate Limiting** - Plays nice with GitHub's API limits
-- **MCP Integration** - Works with Claude Desktop and other MCP tools right out of the box
+- **GitHub Analysis** - Analyzes code repositories, contributions, and commit patterns to identify technical skills
+- **Jira Analysis** - Extracts insights from ticket history and project involvement
+- **Skill Assessment** - Automatically categorizes and quantifies skill proficiency levels
+- **PostgreSQL Database** - Persistent storage with comprehensive schema for tracking developer profiles
+- **Profile Comparison** - Side-by-side comparison of multiple developers
+- **Automatic Updates** - Scheduled profile updates via pgAgent for maintaining current data
+- **Rate Limiting** - Intelligent GitHub API rate limit handling
+- **MCP Integration** - Seamless integration with Claude Desktop and other MCP-compatible tools
 
 ## 📚 Documentation
 
@@ -79,25 +79,28 @@ Hovedopgave/
 
 > **First time here?** Check out the [Setup Guide](docs/SETUP_GUIDE.md) for step-by-step instructions
 
-### What You'll Need
+### Prerequisites
 - PostgreSQL 18.1 or newer
-- Python 3.11 or newer
-- A GitHub Personal Access Token (we'll help you get one)
+- Python 3.10 or newer
+- GitHub Personal Access Token (classic with `repo` and `user` scopes)
+- (Optional) Jira API credentials for Jira analysis
 
-### Getting It Running
+### Installation
 
 ```bash
 # 1. Clone repository
 git clone https://github.com/Viggo0205/Hovedopgave.git
 cd Hovedopgave
 
-# 2. Install Python packages
+# 2. Install dependencies using UV
 uv sync
 
-# 3. Create .env file with your credentials
-# See docs/SETUP_GUIDE.md for details on getting GitHub token
+# 3. Configure environment variables
+# Copy .env.example to .env and add your credentials
+# GITHUB_TOKEN=your_github_token_here
+# DATABASE_URL=postgresql://postgres:password@localhost:5432/developer_skills
 
-# 4. Setup database
+# 4. Initialize database
 python setup_database_complete.py
 
 # 5. Verify everything works
@@ -115,27 +118,22 @@ python scripts/utilities/setup_claude_desktop.py
 # Restart Claude Desktop, then ask Claude:
 # "Analyze developer username123 from GitHub"
 ```
-
-For full setup instructions, see [SETUP_GUIDE.md](docs/SETUP_GUIDE.md)
-
-## 🔧 What This Thing Can Do
+Available MCP Tools
 
 ### Analysis Tools
-- `analyze_github_developer` - Deep dive into someone's GitHub profile
-- `analyze_jira_developer` - Figure out skills from Jira tickets
-- `get_github_profile` - Just the basics about a GitHub user
-- `compare_developers` - See how two developers stack up
-
-## 🔧 Available MCP Tools
-
-### Analysis Tools
-- `analyze_github_developer` - Analyze GitHub profile and extract skills
-- `get_github_profile` - Get basic GitHub user information
+- `analyze_github_developer` - Comprehensive GitHub profile analysis with skill extraction
+- `analyze_jira_developer` - Analyze Jira activity to extract technical and project skills
+- `get_github_profile` - Retrieve basic GitHub user information
+- `compare_developers` - Side-by-side comparison of multiple developer profiles
 
 ### Database Tools
-- `save_analysis_to_database` - Save analysis results
-- `get_user_competence_overview` - Get developer's skill profile
-- `get_all_competences` - List all tracked competences
+- `save_analysis_to_database` - Persist analysis results to PostgreSQL
+- `get_user_competence_overview` - Retrieve complete developer skill profile
+- `get_all_competences` - List all competencies tracked in the system
+- `remove_developer` - Remove developer data from database (GDPR-compliant)
+
+### Export Tools
+- `export_developer_profile` - Export developer data in JSON format (privacy-safe
 
 ### Export Tools
 - `export_developer_profile` - Export developer data (GDPR-compliant)
@@ -254,7 +252,11 @@ This project is part of a thesis on developer skill analysis. See supervisor for
 ## 🐛 When Things Go Wrong
 
 ### Database won't connect
-```powershell
+MIT License - This project is developed as part of a thesis on developer skill analysis at IT-University of Copenhagen.
+
+## 🎓 Academic Context
+
+This project serves as the implementation component of a master's thesis investigating automated developer skill assessment through activity analysis. The research explores how machine learning and API analysis can provide objective, data-driven insights into developer competencie
 # Is PostgreSQL running?
 Get-Service postgresql-x64-18
 
