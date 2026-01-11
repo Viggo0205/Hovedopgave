@@ -315,15 +315,6 @@ python scripts/utilities/setup_claude_desktop.py
 
 See [SETUP_GUIDE.md](docs/SETUP_GUIDE.md) for more solutions.
 
-## 📞 Support
-
-For detailed setup instructions, see:
-- **[Setup Guide](docs/SETUP_GUIDE.md)**
-
-For issues, check:
-- GitHub Issues: https://github.com/Viggo0205/Hovedopgave/issues
-- Thesis supervisor contact information
-
 ---
 
 **Made with ❤️ for developer skill analysis**
