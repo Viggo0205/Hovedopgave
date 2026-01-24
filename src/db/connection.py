@@ -1,5 +1,6 @@
 """
 Database connection management for PostgreSQL.
+Supports role-based connections (regular user vs admin).
 """
 
 import logging
@@ -13,20 +14,37 @@ logger = logging.getLogger(__name__)
 
 
 class DatabaseConnection:
-    """Manages PostgreSQL database connections with connection pooling."""
+    """Manages PostgreSQL database connections with connection pooling and role-based access."""
     
-    def __init__(self, connection_string: Optional[str] = None):
+    def __init__(self, connection_string: Optional[str] = None, admin_password: Optional[str] = None):
         """
         Initialize database connection.
         
         Args:
-            connection_string: PostgreSQL connection string. If None, reads from environment.
+            connection_string: PostgreSQL connection string. If None, reads from DATABASE_URL in .env
+            admin_password: Admin password for privileged operations. If provided, connects as admin role.
         """
-        self.connection_string = connection_string or os.getenv(
-            'DATABASE_URL',
-            #change ifport database or placement of database is different
-            'postgresql://postgres:postgres@localhost:5432/developer_skills'
-        )
+        if admin_password:
+            # Build admin connection string with provided password
+            admin_user = os.getenv('DB_ADMIN_USER', 'skill_analyzer_admin')
+            db_host = os.getenv('DB_HOST', 'localhost')
+            db_port = os.getenv('DB_PORT', '5432')
+            db_name = os.getenv('DB_NAME', 'developer_skills')
+            
+            self.connection_string = f'postgresql://{admin_user}:{admin_password}@{db_host}:{db_port}/{db_name}'
+            self.is_admin_connection = True
+        else:
+            # Regular connection - always read from .env, never hardcode
+            self.connection_string = connection_string or os.getenv('DATABASE_URL')
+            
+            if not self.connection_string:
+                raise ValueError(
+                    "DATABASE_URL not found in environment. "
+                    "Please set DATABASE_URL in your .env file."
+                )
+            
+            self.is_admin_connection = False
+            
         self._pool: Optional[SimpleConnectionPool] = None
         self._initialize_pool()
     

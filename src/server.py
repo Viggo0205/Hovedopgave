@@ -808,18 +808,20 @@ async def get_previous_analysis(
 async def remove_developer(
     github_username: Optional[str] = None,
     jira_email: Optional[str] = None,
-    performed_by: Optional[str] = None
+    performed_by: Optional[str] = None,
+    admin_password: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Remove (deactivate) a developer who no longer works at the company.
     This is a soft delete - the user's data is retained but they won't appear in searches.
     
-    ⚠️ Admin only: This action requires administrator privileges.
+    🔒 ADMIN ONLY: This action requires admin password to write to audit log.
     
     Args:
         github_username: GitHub username of the developer to remove
         jira_email: Jira email of the developer to remove
         performed_by: GitHub username or email of the administrator performing this action
+        admin_password: Admin database password (required for this operation)
         
     Returns:
         Confirmation of removal with developer details
@@ -827,7 +829,17 @@ async def remove_developer(
     try:
         from db.repository import DatabaseRepository
         
-        db_repo = DatabaseRepository()
+        # Check if admin password was provided
+        if not admin_password:
+            return {
+                "status": "error",
+                "error": "Admin password required to remove developer",
+                "message": "Please provide admin_password parameter to perform this operation",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Use admin connection to write audit log
+        db_repo = DatabaseRepository(admin_password=admin_password)
         result = db_repo.remove_developer(github_username, jira_email, performed_by)
         result["timestamp"] = datetime.now().isoformat()
         return result
@@ -845,17 +857,19 @@ async def remove_developer(
 async def reactivate_developer(
     github_username: Optional[str] = None,
     jira_email: Optional[str] = None,
-    performed_by: Optional[str] = None
+    performed_by: Optional[str] = None,
+    admin_password: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Reactivate a previously removed developer.
     
-    ⚠️ Admin only: This action requires administrator privileges.
+    🔒 ADMIN ONLY: This action requires admin password to write to audit log.
     
     Args:
         github_username: GitHub username of the developer to reactivate
         jira_email: Jira email of the developer to reactivate
         performed_by: GitHub username or email of the administrator performing this action
+        admin_password: Admin database password (required for this operation)
         
     Returns:
         Confirmation of reactivation
@@ -863,7 +877,17 @@ async def reactivate_developer(
     try:
         from db.repository import DatabaseRepository
         
-        db_repo = DatabaseRepository()
+        # Check if admin password was provided
+        if not admin_password:
+            return {
+                "status": "error",
+                "error": "Admin password required to reactivate developer",
+                "message": "Please provide admin_password parameter to perform this operation",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Use admin connection to write audit log
+        db_repo = DatabaseRepository(admin_password=admin_password)
         result = db_repo.reactivate_developer(github_username, jira_email, performed_by)
         result["timestamp"] = datetime.now().isoformat()
         return result
@@ -881,17 +905,19 @@ async def reactivate_developer(
 async def get_admin_audit_log(
     user_id: Optional[int] = None,
     action: Optional[str] = None,
-    limit: int = 50
+    limit: int = 50,
+    admin_password: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     Get audit log of administrative actions (deactivations, reactivations, deletions).
     
-    ⚠️ Admin only: This action requires administrator privileges.
+    🔒 ADMIN ONLY: This action requires admin password to view sensitive audit logs.
     
     Args:
         user_id: Optional filter by user ID
         action: Optional filter by action type ('deactivate', 'reactivate', 'delete_permanently')
         limit: Maximum number of entries to return (default 50)
+        admin_password: Admin database password (required for this operation)
         
     Returns:
         List of audit log entries with timestamps and admin identifiers
@@ -899,7 +925,17 @@ async def get_admin_audit_log(
     try:
         from db.repository import DatabaseRepository
         
-        db_repo = DatabaseRepository()
+        # Check if admin password was provided
+        if not admin_password:
+            return {
+                "status": "error",
+                "error": "Admin password required to view audit log",
+                "message": "Please provide admin_password parameter to perform this operation",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Use admin connection to read audit log
+        db_repo = DatabaseRepository(admin_password=admin_password)
         result = db_repo.get_audit_log(user_id, action, limit)
         result["timestamp"] = datetime.now().isoformat()
         return result
@@ -1188,11 +1224,14 @@ async def get_employees_by_skill(
 async def permanently_delete_developer(
     github_username: Optional[str] = None,
     jira_email: Optional[str] = None,
-    confirm: bool = False
+    confirm: bool = False,
+    admin_password: Optional[str] = None
 ) -> Dict[str, Any]:
     """
     PERMANENTLY DELETE a developer and ALL their data (GDPR "right to be forgotten").
     This is irreversible! All analyses, competences, and history will be removed.
+    
+    🔒 ADMIN ONLY: This operation requires admin database password.
     
     WARNING: This is a hard delete. Data cannot be recovered!
     
@@ -1200,6 +1239,7 @@ async def permanently_delete_developer(
         github_username: GitHub username of the developer to delete
         jira_email: Jira email of the developer to delete
         confirm: Must be True to proceed (safety check)
+        admin_password: Admin database password (required for this operation)
         
     Returns:
         Confirmation of permanent deletion
@@ -1207,7 +1247,17 @@ async def permanently_delete_developer(
     try:
         from db.repository import DatabaseRepository
         
-        db_repo = DatabaseRepository()
+        # Check if admin password was provided
+        if not admin_password:
+            return {
+                "status": "error",
+                "error": "Admin password required for permanent deletion",
+                "message": "Please provide admin_password parameter to perform this operation",
+                "timestamp": datetime.now().isoformat()
+            }
+        
+        # Use admin connection for this operation
+        db_repo = DatabaseRepository(admin_password=admin_password)
         result = db_repo.delete_user_permanently(github_username, jira_email, confirm)
         result["timestamp"] = datetime.now().isoformat()
         return result

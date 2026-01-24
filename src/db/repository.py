@@ -33,16 +33,22 @@ def _serialize_datetime(obj: Any) -> Any:
 
 
 class DatabaseRepository:
-    """Repository for database operations."""
+    """Repository for database operations with role-based access control."""
     
-    def __init__(self, db_connection: Optional[DatabaseConnection] = None):
+    def __init__(self, db_connection: Optional[DatabaseConnection] = None, admin_password: Optional[str] = None):
         """
         Initialize the repository.
         
         Args:
             db_connection: Database connection instance
+            admin_password: Admin password for privileged operations (e.g., permanent deletion)
         """
-        self.db = db_connection or DatabaseConnection()
+        if admin_password:
+            self.db = DatabaseConnection(admin_password=admin_password)
+            self.is_admin = True
+        else:
+            self.db = db_connection or DatabaseConnection()
+            self.is_admin = False
     
     def get_competence_categories(self) -> Dict[str, List[str]]:
         """
@@ -606,15 +612,31 @@ class DatabaseRepository:
                     "error": "performed_by parameter is required (admin identifier)"
                 }
             
-            # Check if user exists and is active
-            user = self.get_user_by_identifier(github_username, jira_email, include_inactive=False)
+            # Check if user exists (including inactive)
+            user = self.get_user_by_identifier(github_username, jira_email, include_inactive=True)
             if not user:
                 return {
                     "success": False,
                     "status": "not_found",
-                    "message": "No active developer found with the provided identifier",
+                    "message": "No developer found with the provided identifier",
                     "github_username": github_username,
                     "jira_email": jira_email
+                }
+            
+            # Check if already deactivated (idempotent)
+            if not user.get('is_active', True):
+                return {
+                    "success": True,
+                    "status": "already_inactive",
+                    "message": f"Developer '{user['github_username'] or user['jira_email']}' is already deactivated",
+                    "developer": {
+                        "github_username": user.get('github_username'),
+                        "full_name": user.get('full_name'),
+                        "display_name": user.get('display_name'),
+                        "deactivated_at": user.get('deactivated_at'),
+                        "deactivated_by": user.get('deactivated_by')
+                    },
+                    "note": "User was already inactive. No action taken."
                 }
             
             # Deactivate the user
@@ -678,6 +700,31 @@ class DatabaseRepository:
                     "success": False,
                     "status": "error",
                     "error": "performed_by parameter is required (admin identifier)"
+                }
+            
+            # Check if user exists (including active)
+            user = self.get_user_by_identifier(github_username, jira_email, include_inactive=True)
+            if not user:
+                return {
+                    "success": False,
+                    "status": "not_found",
+                    "message": "No developer found with the provided identifier",
+                    "github_username": github_username,
+                    "jira_email": jira_email
+                }
+            
+            # Check if already active (idempotent)
+            if user.get('is_active', False):
+                return {
+                    "success": True,
+                    "status": "already_active",
+                    "message": f"Developer '{user['github_username'] or user['jira_email']}' is already active",
+                    "developer": {
+                        "github_username": user.get('github_username'),
+                        "full_name": user.get('full_name'),
+                        "display_name": user.get('display_name')
+                    },
+                    "note": "User was already active. No action taken."
                 }
             
             success = self.reactivate_user(github_username, jira_email, performed_by)
@@ -795,6 +842,8 @@ class DatabaseRepository:
         Permanently delete a user and all their data from the database.
         This is a hard delete - all data will be removed (GDPR compliance).
         
+        🔒 ADMIN ONLY: This operation requires admin privileges.
+        
         Args:
             github_username: GitHub username
             jira_email: Jira email address
@@ -804,6 +853,15 @@ class DatabaseRepository:
             Dictionary with deletion details
         """
         try:
+            # SECURITY CHECK: Verify admin privileges
+            if not self.is_admin:
+                return {
+                    "status": "error",
+                    "error": "Permission denied: Admin privileges required for permanent deletion",
+                    "required_role": "skill_analyzer_admin",
+                    "message": "Use DatabaseRepository(use_admin=True) to perform this operation"
+                }
+            
             # Validation: confirm must be True
             if not confirm:
                 return {
