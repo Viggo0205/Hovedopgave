@@ -21,12 +21,20 @@ async def analyze_github_developer(
     include_contributions: bool = True,
     time_range_months: int = 12
 ) -> Dict[str, Any]:
-    #  Python docstrings
     """
     Analyze developer skills based on GitHub activity.
     
     Fetches user repositories and analyzes programming languages used.
     Uses the configured GitHub username if none is provided.
+    
+    FORMATTING INSTRUCTIONS:
+    - Structure output in sections with headers:
+      📊 Profile Overview (name, repos, bio)
+      💻 Top Programming Languages (with percentages/LOC)
+      🎯 Expertise Areas (Web Frontend, Backend, etc.)
+      📈 Skill Levels (languages categorized by proficiency)
+    - Use progress bars or visual indicators for percentages when possible
+    - Always show skill levels as "Expert (95%)", "Advanced (75%)", etc.
     
     Args:
         username: GitHub username to analyze (optional, uses configured user if not provided)
@@ -142,9 +150,17 @@ async def compare_developers(
     developer2_github: str,
     comparison_metrics: Optional[List[str]] = None
 ) -> Dict[str, Any]:
-    #  Python docstrings
     """
     Compare skill profiles between two developers.
+    
+    Checks database first for stored analyses. Falls back to GitHub if not found.
+    
+    FORMATTING INSTRUCTIONS:
+    - Present results in **comparison table format**
+    - Show side-by-side comparison with columns: Skill | Developer 1 | Developer 2
+    - Highlight common skills vs unique skills
+    - Include proficiency percentages in table cells
+    - Add summary row with total skill counts
     
     Args:
         developer1_github: First developer's GitHub username
@@ -152,10 +168,55 @@ async def compare_developers(
         comparison_metrics: Specific metrics to compare
     
     Returns:
-        Detailed comparison analysis
+        Detailed comparison analysis with formatting instructions
     """
     try:
-        # Analyze both developers using proper service layer
+        from db.repository import DatabaseRepository
+        
+        db_repo = DatabaseRepository()
+        
+        # Try to get both developers from database
+        dev1_db = db_repo.get_user_by_identifier(developer1_github, None)
+        dev2_db = db_repo.get_user_by_identifier(developer2_github, None)
+        
+        # If both are in database, compare from DB
+        if dev1_db and dev2_db:
+            logger.info(f"Comparing {developer1_github} and {developer2_github} from database")
+            
+            dev1_competences = db_repo.get_user_competence_overview(dev1_db['id'])
+            dev2_competences = db_repo.get_user_competence_overview(dev2_db['id'])
+            
+            return {
+                "comparison_type": "database",
+                "data_source": "database",
+                "developers": {
+                    "developer1": developer1_github,
+                    "developer2": developer2_github
+                },
+                "individual_profiles": {
+                    "developer1": {
+                        "user_info": dev1_db,
+                        "competences": dev1_competences,
+                        "total_competences": len(dev1_competences)
+                    },
+                    "developer2": {
+                        "user_info": dev2_db,
+                        "competences": dev2_competences,
+                        "total_competences": len(dev2_competences)
+                    }
+                },
+                "comparison_summary": {
+                    "dev1_competences": len(dev1_competences),
+                    "dev2_competences": len(dev2_competences),
+                    "common_skills": len(set(c['competence_name'] for c in dev1_competences) & 
+                                        set(c['competence_name'] for c in dev2_competences)),
+                },
+                "analysis_date": datetime.now().isoformat()
+            }
+        
+        # Fallback to GitHub if either not in database
+        logger.info(f"One or both developers not in database, fetching from GitHub")
+        
         github_service = GitHubService()
         analyzer = GitHubAnalyzer(github_service)
         
@@ -164,7 +225,8 @@ async def compare_developers(
         
         # Simple comparison - return both analyses
         return {
-            "comparison_type": "github_raw_data",
+            "comparison_type": "github_fallback",
+            "data_source": "github",
             "developers": {
                 "developer1": developer1_github,
                 "developer2": developer2_github
@@ -180,7 +242,7 @@ async def compare_developers(
                 "dev1_repos": dev1_analysis.get("total_repositories", 0),
                 "dev2_repos": dev2_analysis.get("total_repositories", 0)
             },
-            "_save_prompt": f"\n\n💾 Would you like to save both developer analyses to the database?\n\nDeveloper 1: save_analysis_to_database(github_username='{developer1_github}')\nDeveloper 2: save_analysis_to_database(github_username='{developer2_github}')\n\nSaving allows for historical tracking and future comparisons."
+            "_save_prompt": f"\n\n💾 Would you like to save both developer analyses to the database?\n\nDeveloper 1: save_analysis_to_database(github_username='{developer1_github}')\nDeveloper 2: save_analysis_to_database(github_username='{developer2_github}')\n\nSaving allows for historical tracking and faster future comparisons."
         }
         
     except Exception as e:
@@ -335,16 +397,16 @@ async def get_all_employees(
 ) -> Dict[str, Any]:
     """
     Get all employees from database with fallback to GitHub discovery.
-    
-    Priority:
-    1. Get active users from database
-    2. If empty, check if token user is in an org -> get org members
-    3. If not in org -> get collaborators from user's repositories
-    
+
+    Priority order for employee discovery:
+    1. Get active users from database.
+    2. If database is empty, check if the token user is in a GitHub organization and get org members.
+    3. If not in an org, get collaborators from the user's repositories.
+
     Args:
         source: Data source ("github" or "all")
         include_metadata: Include additional metadata (commit counts, last activity)
-    
+
     Returns:
         Dictionary containing employees with optional metadata
     """
@@ -391,7 +453,7 @@ async def get_all_employees(
                     # User is in organizations - get org members
                     logger.info(f"User belongs to {len(orgs)} organizations, fetching members")
                     for org in orgs:
-                        members = github_service.get_organization_members(org.login)
+                        members = await github_service.get_organization_members(org.login)
                         discovered.extend(members)
                 else:
                     # User not in org - get collaborators from repos
@@ -750,39 +812,47 @@ async def get_previous_analysis(
     Returns:
         All stored analysis versions with competences for the user
     """
+    import traceback
     try:
         from db.repository import DatabaseRepository
-        
         db_repo = DatabaseRepository()
-        
+
         # Get user
         user = db_repo.get_user_by_identifier(github_username, None)
         if not user:
+            logger.warning(f"No user found for github_username={github_username}")
             return {
                 "status": "not_found",
                 "message": "No previous analyses found for this user",
                 "timestamp": datetime.now().isoformat()
             }
-        
+
         # Get all analysis metadata
         analyses_metadata = db_repo.get_all_analyses(user['id'])
-        
+        logger.info(f"Found {len(analyses_metadata)} analyses for user_id={user['id']} ({github_username})")
+
         # For each version, get the competences
         analyses_with_competences = []
         for analysis in analyses_metadata:
-            version = analysis['version_number']
+            version = analysis.get('version_number')
             competences = db_repo.get_competences_for_version(user['id'], version)
-            
+            # Ensure metadata is serializable (if it's a custom object, convert to dict)
+            metadata = analysis.get('metadata')
+            if hasattr(metadata, 'to_dict'):
+                metadata = metadata.to_dict()
+            elif hasattr(metadata, 'dict'):
+                metadata = metadata.dict()
             analyses_with_competences.append({
                 "version": version,
-                "analysis_date": analysis['analysis_date'],
-                "total_repositories": analysis['total_repositories'],
-                "data_source": analysis['data_source'],
-                "metadata": analysis['metadata'],
+                "analysis_date": analysis.get('analysis_date'),
+                "total_repositories": analysis.get('total_repositories'),
+                "data_source": analysis.get('data_source'),
+                "metadata": metadata,
                 "competences": competences,
                 "total_competences": len(competences)
             })
-        
+
+        logger.info(f"Returning {len(analyses_with_competences)} analysis versions for user_id={user['id']}")
         return {
             "status": "success",
             "user_info": {
@@ -794,12 +864,15 @@ async def get_previous_analysis(
             "message": f"Found {len(analyses_with_competences)} analysis version(s)",
             "timestamp": datetime.now().isoformat()
         }
-        
+
     except Exception as e:
-        logger.error(f"Error retrieving previous analysis: {e}")
+        logger.error(f"Error retrieving previous analysis for {github_username}: {e}\n{traceback.format_exc()}")
+        # Always return a serializable dictionary, even on error
         return {
             "status": "error",
             "error": str(e),
+            "traceback": traceback.format_exc(),
+            "github_username": github_username,
             "timestamp": datetime.now().isoformat()
         }
 
@@ -965,6 +1038,12 @@ async def get_employees_by_skill(
     Searches database first. If no results found, optionally falls back to analyzing 
     GitHub users directly.
     
+    FORMATTING INSTRUCTIONS:
+    - Use ranked list format sorted by proficiency level
+    - Group by rank: Expert → Advanced → Intermediate → Beginner
+    - Format each entry: • [Name] - Expert (95%) - [repositories] repos, [lines] LOC
+    - Show rank distribution summary at top: "3 Expert, 2 Advanced, 1 Intermediate"
+    
     Args:
         skill_name: Name of the skill/competence to search for (e.g., "Python", "JavaScript", "React")
         min_level: Minimum proficiency level filter - one of: "Beginner", "Intermediate", "Advanced", "Expert"
@@ -986,6 +1065,8 @@ async def get_employees_by_skill(
             min_level=min_level,
             include_inactive=include_inactive
         )
+        
+        logger.info(f"Database query returned {len(users) if users else 0} users for skill '{skill_name}'")
         
         # Database has results - return them
         if users:
