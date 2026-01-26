@@ -41,6 +41,7 @@ class GitHubService:
         
         logger.info(f"GitHubService initialized with rate limit: {requests_per_minute} req/min")
     
+    # Beskytter mod spam af fejlende API calls:
     @classmethod
     def is_degraded(cls) -> bool:
         """Check if service is in degraded state."""

@@ -45,6 +45,7 @@ async def analyze_github_developer(
         
         # Use configured username if none provided
         username = username or config.github_username
+       
         if not username:
             return {
                 "error": "No GitHub username provided and no default username configured in GITHUB_USERNAME environment variable"
@@ -59,6 +60,7 @@ async def analyze_github_developer(
         # Perform the analysis
         analysis_result = await analyzer.analyze_developer(username)
         
+        # format to user friendly output
         result = {
             "developer": username,
             "analysis_type": "github",
