@@ -22,7 +22,7 @@ def test_db_config():
         'port': 5432,
         'database': 'developer_skills_test',
         'user': 'postgres',
-        'password': '1234'  # Match your actual PostgreSQL password
+        'password': 'Zappanoel1229!'  # Match your actual PostgreSQL password
     }
 
 

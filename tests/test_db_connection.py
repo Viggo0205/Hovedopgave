@@ -1,6 +1,6 @@
 """Unit tests for DatabaseConnection class."""
 
-import pytest
+import pytest  # type: ignore
 from db.connection import DatabaseConnection
 
 

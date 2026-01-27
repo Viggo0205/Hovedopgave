@@ -1,6 +1,5 @@
 import logging
 from typing import Any, Dict, List
-
 from config import Config
 from analyzers.skill_processor import SkillProcessor
 

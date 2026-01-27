@@ -1,7 +1,6 @@
 """
 Database connection management for PostgreSQL.
 """
-
 import logging
 import os
 from typing import Optional
@@ -29,7 +28,7 @@ class DatabaseConnection:
         self.connection_string = connection_string or os.getenv(
             'DATABASE_URL',
             #change ifport database or placement of database is different
-            'postgresql://postgres:postgres@localhost:5432/developer_skills'
+            'postgresql://postgres:Zappanoel1229!@localhost:5432/developer_skills'
         )
         self._pool: Optional[SimpleConnectionPool] = None
         self._initialize_pool()
