@@ -7,8 +7,15 @@ from config import Config
 from services.github_service import GitHubService
 from analyzers.github_analyzer import GitHubAnalyzer
 
-# Initialize logging
-logging.basicConfig(level=logging.INFO)
+# Initialize logging: include DEBUG and file output for diagnostics
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("mcp_server.log", encoding="utf-8")
+    ]
+)
 logger = logging.getLogger(__name__)
 
 # Initialize MCP server

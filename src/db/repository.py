@@ -897,19 +897,19 @@ class DatabaseRepository:
             # Build query using the user_competence_overview view
             query = """
                 SELECT 
-                    user_id,
-                    github_username,
-                    full_name,
-                    display_name,
-                    company,
-                    location,
-                    role_name,
-                    competence_name,
-                    competence_category,
-                    procent,
-                    rank_name,
-                    usage_frequency,
-                    last_updated
+                    uco.user_id,
+                    uco.github_username,
+                    uco.full_name,
+                    uco.display_name,
+                    uco.company,
+                    uco.location,
+                    uco.role_name,
+                    uco.competence_name,
+                    uco.competence_category,
+                    uco.procent,
+                    uco.rank_name,
+                    uco.usage_frequency,
+                    uco.last_updated
                 FROM user_competence_overview uco
                 JOIN users u ON uco.user_id = u.id
                 WHERE LOWER(uco.competence_name) = LOWER(%s)
@@ -942,7 +942,11 @@ class DatabaseRepository:
             
             query += " ORDER BY uco.procent DESC, uco.github_username"
             
+            # Debug: log the query and params to help diagnose empty-result issues
+            logger.debug("get_users_by_competence - executing query:\n%s", query)
+            logger.debug("get_users_by_competence - params: %s", params)
             results = self.db.execute_query(query, tuple(params))
+            logger.debug("get_users_by_competence - raw result count: %s", len(results) if results is not None else 0)
             
             users = []
             for row in results:
